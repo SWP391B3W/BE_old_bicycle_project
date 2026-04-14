@@ -10,6 +10,7 @@ import swp391.old_bicycle_project.entity.enums.PlatformFeeStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -37,6 +38,10 @@ public class OrderResponse {
     private OrderStatus status;
     private OrderFundingStatus fundingStatus;
     private PaymentMethod paymentMethod;
+    private String sellerHandoverNote;
+    private List<String> sellerHandoverImageUrls;
+    private String buyerReceiptNote;
+    private List<String> buyerReceiptImageUrls;
     private LocalDateTime acceptedAt;
     private LocalDateTime paymentDeadline;
     private OrderCancelReason cancelReason;

@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 import swp391.old_bicycle_project.dto.order.OrderCreateRequest;
 import swp391.old_bicycle_project.dto.order.OrderResponse;
 import swp391.old_bicycle_project.entity.Order;
+import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
 import swp391.old_bicycle_project.entity.Product;
 import swp391.old_bicycle_project.entity.User;
 import swp391.old_bicycle_project.entity.enums.*;
@@ -18,6 +19,8 @@ import swp391.old_bicycle_project.repository.ProductRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -26,11 +29,17 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final OrderEvidenceService orderEvidenceService;
 
     @Override
     @Transactional
     public OrderResponse createOrder(User currentUser, OrderCreateRequest request) {
-        Product product = productRepository.findById(request.getProductId())
+        UUID productId = request.getProductId();
+        if (productId == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST_BODY);
+        }
+
+        Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         if (product.getSeller() == null) {
@@ -71,7 +80,8 @@ public class OrderServiceImpl implements OrderService {
                 .status(OrderStatus.pending)
                 .build();
 
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, Map.of());
     }
 
     @Override
@@ -80,7 +90,13 @@ public class OrderServiceImpl implements OrderService {
         List<Order> orders = currentUser.getRole() == AppRole.admin
                 ? orderRepository.findAllByOrderByCreatedAtDesc()
                 : orderRepository.findByBuyerIdOrSellerIdOrderByCreatedAtDesc(currentUser.getId(), currentUser.getId());
-        return orders.stream().map(this::map).toList();
+
+        Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmission>> evidenceByOrderId =
+            orderEvidenceService.getEvidenceByOrderIds(orders.stream().map(Order::getId).toList());
+
+        return orders.stream()
+            .map(order -> map(order, evidenceByOrderId.getOrDefault(order.getId(), Map.of())))
+            .toList();
     }
 
     @Override
@@ -100,7 +116,8 @@ public class OrderServiceImpl implements OrderService {
         order.setCancelReason(null);
         order.setCancelledAt(null);
 
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, orderEvidenceService.getEvidenceByOrderId(savedOrder.getId()));
     }
 
     @Override
@@ -126,7 +143,7 @@ public class OrderServiceImpl implements OrderService {
             order.setCancelReason(OrderCancelReason.payment_expired);
             order.setCancelledAt(LocalDateTime.now());
             order.setFundingStatus(OrderFundingStatus.unpaid);
-            orderRepository.save(order);
+            persistOrder(order);
             throw new AppException(ErrorCode.PAYMENT_EXPIRED);
         }
 
@@ -134,7 +151,8 @@ public class OrderServiceImpl implements OrderService {
         order.setPaidAmount(order.getRequiredUpfrontAmount());
         order.setRemainingAmount(order.getTotalAmount().subtract(order.getRequiredUpfrontAmount()));
         order.setFundingStatus(OrderFundingStatus.held);
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, orderEvidenceService.getEvidenceByOrderId(savedOrder.getId()));
     }
 
     @Override
@@ -147,8 +165,14 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        if (files == null || files.isEmpty()) {
+            throw new AppException(ErrorCode.ORDER_EVIDENCE_REQUIRED);
+        }
+        orderEvidenceService.createSellerHandoverEvidence(order, currentUser, note, files);
+
         order.setStatus(OrderStatus.awaiting_buyer_confirmation);
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, orderEvidenceService.getEvidenceByOrderId(savedOrder.getId()));
     }
 
     @Override
@@ -162,6 +186,8 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        orderEvidenceService.createBuyerReceiptEvidence(order, currentUser, note, files);
+
         order.setStatus(OrderStatus.completed);
         order.setFundingStatus(OrderFundingStatus.seller_payout_pending);
 
@@ -169,7 +195,8 @@ public class OrderServiceImpl implements OrderService {
         product.setStatus(ProductStatus.sold);
         productRepository.save(product);
 
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, orderEvidenceService.getEvidenceByOrderId(savedOrder.getId()));
     }
 
     @Override
@@ -217,7 +244,8 @@ public class OrderServiceImpl implements OrderService {
             order.setCancelReason(OrderCancelReason.buyer_cancelled);
         }
 
-        return map(orderRepository.save(order));
+        Order savedOrder = persistOrder(order);
+        return map(savedOrder, orderEvidenceService.getEvidenceByOrderId(savedOrder.getId()));
     }
 
     private BigDecimal resolveRequiredUpfrontAmount(BigDecimal total, PaymentOption paymentOption, BigDecimal upfrontAmount) {
@@ -236,6 +264,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Order getOrder(UUID orderId) {
+        if (orderId == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST_BODY);
+        }
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
     }
@@ -258,7 +289,10 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private OrderResponse map(Order order) {
+    private OrderResponse map(Order order, Map<OrderEvidenceType, OrderEvidenceSubmission> evidenceByType) {
+        OrderEvidenceSubmission sellerHandoverEvidence = evidenceByType.get(OrderEvidenceType.seller_handover);
+        OrderEvidenceSubmission buyerReceiptEvidence = evidenceByType.get(OrderEvidenceType.buyer_receipt);
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .productId(order.getProduct() != null ? order.getProduct().getId() : null)
@@ -279,6 +313,10 @@ public class OrderServiceImpl implements OrderService {
                 .status(order.getStatus())
                 .fundingStatus(order.getFundingStatus())
                 .paymentMethod(order.getPaymentMethod())
+                .sellerHandoverNote(sellerHandoverEvidence != null ? sellerHandoverEvidence.getNote() : null)
+                .sellerHandoverImageUrls(extractFileUrls(sellerHandoverEvidence))
+                .buyerReceiptNote(buyerReceiptEvidence != null ? buyerReceiptEvidence.getNote() : null)
+                .buyerReceiptImageUrls(extractFileUrls(buyerReceiptEvidence))
                 .acceptedAt(order.getAcceptedAt())
                 .paymentDeadline(order.getPaymentDeadline())
                 .cancelReason(order.getCancelReason())
@@ -286,5 +324,19 @@ public class OrderServiceImpl implements OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();
+    }
+
+    private List<String> extractFileUrls(OrderEvidenceSubmission submission) {
+        if (submission == null || submission.getFiles() == null || submission.getFiles().isEmpty()) {
+            return List.of();
+        }
+
+        return submission.getFiles().stream()
+                .map(file -> file.getFileUrl())
+                .toList();
+    }
+
+    private Order persistOrder(Order order) {
+        return orderRepository.save(Objects.requireNonNull(order));
     }
 }

@@ -32,6 +32,10 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     List<Order> findAllByOrderByCreatedAtDesc();
 
+    long countByBuyerId(UUID buyerId);
+
+    long countBySellerId(UUID sellerId);
+
     List<Order> findByStatusAndFundingStatusAndPaymentDeadlineBefore(
             OrderStatus status,
             OrderFundingStatus fundingStatus,

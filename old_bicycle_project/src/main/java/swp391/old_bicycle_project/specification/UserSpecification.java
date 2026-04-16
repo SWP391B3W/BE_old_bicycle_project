@@ -1,14 +1,14 @@
 package swp391.old_bicycle_project.specification;
 
-import org.springframework.data.jpa.domain.Specification;
 import swp391.old_bicycle_project.entity.User;
 import swp391.old_bicycle_project.entity.enums.AppRole;
 import swp391.old_bicycle_project.entity.enums.UserStatus;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class UserSpecification {
+public class UserSpecification {
 
     private UserSpecification() {
     }

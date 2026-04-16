@@ -40,4 +40,21 @@ public class PasswordResetToken {
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
+
+    // Manual Getter
+    public UUID getId() { return id; }
+    public User getUser() { return user; }
+    public String getToken() { return token; }
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    // Manual Builder
+    public static PasswordResetTokenBuilder builder() { return new PasswordResetTokenBuilder(); }
+    public static class PasswordResetTokenBuilder {
+        private PasswordResetToken r = new PasswordResetToken();
+        public PasswordResetTokenBuilder user(User user) { r.user = user; return this; }
+        public PasswordResetTokenBuilder token(String token) { r.token = token; return this; }
+        public PasswordResetTokenBuilder expiresAt(LocalDateTime d) { r.expiresAt = d; return this; }
+        public PasswordResetToken build() { return r; }
+    }
 }

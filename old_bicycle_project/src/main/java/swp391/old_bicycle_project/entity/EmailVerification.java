@@ -40,4 +40,21 @@ public class EmailVerification {
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
+
+    // Manual Getter
+    public UUID getId() { return id; }
+    public User getUser() { return user; }
+    public String getToken() { return token; }
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    // Manual Builder
+    public static EmailVerificationBuilder builder() { return new EmailVerificationBuilder(); }
+    public static class EmailVerificationBuilder {
+        private EmailVerification r = new EmailVerification();
+        public EmailVerificationBuilder user(User user) { r.user = user; return this; }
+        public EmailVerificationBuilder token(String token) { r.token = token; return this; }
+        public EmailVerificationBuilder expiresAt(LocalDateTime d) { r.expiresAt = d; return this; }
+        public EmailVerification build() { return r; }
+    }
 }

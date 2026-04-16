@@ -1,9 +1,29 @@
 package swp391.old_bicycle_project.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
 import swp391.old_bicycle_project.entity.enums.AppRole;
 import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -75,5 +95,28 @@ public class OrderEvidenceSubmission {
     public void addFile(OrderEvidenceFile file) {
         files.add(file);
         file.setSubmission(this);
+    }
+
+    // Manual Getter
+    public UUID getId() { return id; }
+    public Order getOrder() { return order; }
+    public User getSubmittedByUser() { return submittedByUser; }
+    public AppRole getSubmittedByRole() { return submittedByRole; }
+    public OrderEvidenceType getEvidenceType() { return evidenceType; }
+    public String getNote() { return note; }
+    public List<OrderEvidenceFile> getFiles() { return files; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+
+    // Manual Builder
+    public static OrderEvidenceSubmissionBuilder builder() { return new OrderEvidenceSubmissionBuilder(); }
+    public static class OrderEvidenceSubmissionBuilder {
+        private OrderEvidenceSubmission r = new OrderEvidenceSubmission();
+        public OrderEvidenceSubmissionBuilder id(UUID id) { r.id = id; return this; }
+        public OrderEvidenceSubmissionBuilder order(Order order) { r.order = order; return this; }
+        public OrderEvidenceSubmissionBuilder submittedByUser(User user) { r.submittedByUser = user; return this; }
+        public OrderEvidenceSubmissionBuilder submittedByRole(AppRole role) { r.submittedByRole = role; return this; }
+        public OrderEvidenceSubmissionBuilder evidenceType(OrderEvidenceType type) { r.evidenceType = type; return this; }
+        public OrderEvidenceSubmissionBuilder note(String note) { r.note = note; return this; }
+        public OrderEvidenceSubmission build() { return r; }
     }
 }

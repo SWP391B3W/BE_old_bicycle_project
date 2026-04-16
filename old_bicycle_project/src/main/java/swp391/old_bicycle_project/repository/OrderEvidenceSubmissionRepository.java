@@ -1,11 +1,11 @@
 package swp391.old_bicycle_project.repository;
 
+import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
+import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
-import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
 
 import java.util.Collection;
 import java.util.List;

@@ -40,4 +40,26 @@ public class RefreshToken {
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
+
+    // Manual Getters
+    public String getToken() { return token; }
+    public User getUser() { return user; }
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+
+    public void setToken(String token) { this.token = token; }
+    public void setUser(User user) { this.user = user; }
+    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+
+    public static RefreshTokenBuilder builder() {
+        return new RefreshTokenBuilder();
+    }
+
+    public static class RefreshTokenBuilder {
+        private RefreshToken rt = new RefreshToken();
+        public RefreshTokenBuilder id(UUID id) { rt.id = id; return this; }
+        public RefreshTokenBuilder user(User user) { rt.user = user; return this; }
+        public RefreshTokenBuilder token(String token) { rt.token = token; return this; }
+        public RefreshTokenBuilder expiresAt(LocalDateTime expiresAt) { rt.expiresAt = expiresAt; return this; }
+        public RefreshToken build() { return rt; }
+    }
 }

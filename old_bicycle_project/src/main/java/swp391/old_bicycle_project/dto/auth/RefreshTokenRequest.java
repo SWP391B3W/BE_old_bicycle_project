@@ -8,4 +8,10 @@ public class RefreshTokenRequest {
 
     @NotBlank(message = "Refresh token không được để trống")
     private String refreshToken;
+
+    // Manual Getter
+    public String getRefreshToken() { return refreshToken; }
+
+    // Manual Setter
+    public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
 }

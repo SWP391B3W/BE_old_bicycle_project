@@ -11,6 +11,9 @@ import swp391.old_bicycle_project.dto.auth.ResendVerificationRequest;
 import swp391.old_bicycle_project.dto.auth.ResetPasswordRequest;
 import swp391.old_bicycle_project.entity.User;
 
+/**
+ * Service interface for Authentication and User Profile management.
+ */
 public interface AuthService {
 
     String register(RegisterRequest request);

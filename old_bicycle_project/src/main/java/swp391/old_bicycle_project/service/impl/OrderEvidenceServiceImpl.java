@@ -1,9 +1,7 @@
 package swp391.old_bicycle_project.service.impl;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
+import swp391.old_bicycle_project.dto.response.OrderEvidenceFileResponseDTO;
+import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDTO;
 import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.OrderEvidenceFile;
 import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
@@ -15,6 +13,10 @@ import swp391.old_bicycle_project.repository.OrderEvidenceSubmissionRepository;
 import swp391.old_bicycle_project.service.OrderEvidenceService;
 import swp391.old_bicycle_project.service.StorageService;
 import swp391.old_bicycle_project.validation.MultipartFileValidationUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,7 +38,7 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
     @Override
     @Transactional
-    public OrderEvidenceSubmission createSellerHandoverEvidence(
+    public OrderEvidenceSubmissionResponseDTO createSellerHandoverEvidence(
             Order order,
             User submittedBy,
             String note,
@@ -47,7 +49,7 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
     @Override
     @Transactional
-    public OrderEvidenceSubmission createBuyerReceiptEvidence(
+    public OrderEvidenceSubmissionResponseDTO createBuyerReceiptEvidence(
             Order order,
             User submittedBy,
             String note,
@@ -58,17 +60,17 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmission>> getEvidenceByOrderIds(Collection<UUID> orderIds) {
+    public Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO>> getEvidenceByOrderIds(Collection<UUID> orderIds) {
         if (orderIds == null || orderIds.isEmpty()) {
             return Collections.emptyMap();
         }
 
         List<OrderEvidenceSubmission> submissions = orderEvidenceSubmissionRepository.findDetailedByOrderIds(orderIds);
-        Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmission>> result = new LinkedHashMap<>();
+        Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO>> result = new LinkedHashMap<>();
 
         for (OrderEvidenceSubmission submission : submissions) {
             result.computeIfAbsent(submission.getOrder().getId(), ignored -> new EnumMap<>(OrderEvidenceType.class))
-                    .put(submission.getEvidenceType(), submission);
+                    .put(submission.getEvidenceType(), mapToDTO(submission));
         }
 
         return result;
@@ -76,7 +78,7 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<OrderEvidenceType, OrderEvidenceSubmission> getEvidenceByOrderId(UUID orderId) {
+    public Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> getEvidenceByOrderId(UUID orderId) {
         if (orderId == null) {
             return Collections.emptyMap();
         }
@@ -84,7 +86,7 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
         return getEvidenceByOrderIds(List.of(orderId)).getOrDefault(orderId, Collections.emptyMap());
     }
 
-    private OrderEvidenceSubmission createSubmission(
+    private OrderEvidenceSubmissionResponseDTO createSubmission(
             Order order,
             User submittedBy,
             OrderEvidenceType evidenceType,
@@ -129,7 +131,7 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
                         .build());
             }
 
-            return orderEvidenceSubmissionRepository.save(submission);
+            return mapToDTO(orderEvidenceSubmissionRepository.save(submission));
         } catch (RuntimeException exception) {
             uploadedUrls.forEach(storageService::deleteFile);
             throw exception;
@@ -160,5 +162,26 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
     private String buildFolder(UUID orderId, OrderEvidenceType evidenceType) {
         return "orders/" + orderId + "/" + evidenceType.name();
+    }
+
+    private OrderEvidenceSubmissionResponseDTO mapToDTO(OrderEvidenceSubmission submission) {
+        return OrderEvidenceSubmissionResponseDTO.builder()
+                .id(submission.getId())
+                .evidenceType(submission.getEvidenceType())
+                .submittedByUserId(submission.getSubmittedByUser().getId())
+                .submittedByName(submission.getSubmittedByUser().getFullName())
+                .submittedByRole(submission.getSubmittedByRole())
+                .note(submission.getNote())
+                .createdAt(submission.getCreatedAt())
+                .files(submission.getFiles().stream()
+                        .map(file -> OrderEvidenceFileResponseDTO.builder()
+                                .id(file.getId())
+                                .fileUrl(file.getFileUrl())
+                                .fileName(file.getFileName())
+                                .contentType(file.getContentType())
+                                .sortOrder(file.getSortOrder())
+                                .build())
+                        .toList())
+                .build();
     }
 }

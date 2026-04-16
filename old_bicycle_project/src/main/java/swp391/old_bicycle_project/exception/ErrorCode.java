@@ -1,9 +1,7 @@
 package swp391.old_bicycle_project.exception;
 
-import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
-@Getter
 public enum ErrorCode {
     UNCATEGORIZED_EXCEPTION(9999, "Lỗi không xác định", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_KEY(1001, "Key không hợp lệ", HttpStatus.BAD_REQUEST),
@@ -73,4 +71,8 @@ public enum ErrorCode {
     private final int code;
     private final String message;
     private final HttpStatus statusCode;
+
+    public int getCode() { return code; }
+    public String getMessage() { return message; }
+    public HttpStatus getStatusCode() { return statusCode; }
 }

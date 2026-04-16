@@ -1,10 +1,10 @@
 package swp391.old_bicycle_project.service;
 
-import org.springframework.data.domain.Page;
-import swp391.old_bicycle_project.dto.response.AdminUserActivityResponseDTO;
 import swp391.old_bicycle_project.dto.response.AdminUserResponseDTO;
+import swp391.old_bicycle_project.dto.response.AdminUserActivityResponseDTO;
 import swp391.old_bicycle_project.entity.enums.AppRole;
 import swp391.old_bicycle_project.entity.enums.UserStatus;
+import org.springframework.data.domain.Page;
 
 import java.util.UUID;
 

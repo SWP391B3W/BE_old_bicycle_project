@@ -10,4 +10,10 @@ public class ResendVerificationRequest {
     @NotBlank(message = "Email không được để trống")
     @Email(message = "Email không hợp lệ")
     private String email;
+
+    // Manual Getter
+    public String getEmail() { return email; }
+
+    // Manual Setter
+    public void setEmail(String email) { this.email = email; }
 }

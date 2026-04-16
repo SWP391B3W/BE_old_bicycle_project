@@ -1,43 +1,52 @@
 package swp391.old_bicycle_project.service.impl;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import swp391.old_bicycle_project.dto.response.AdminUserActivityResponseDTO;
 import swp391.old_bicycle_project.dto.response.AdminUserResponseDTO;
+import swp391.old_bicycle_project.entity.Conversation;
+import swp391.old_bicycle_project.entity.Notification;
 import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.Product;
+import swp391.old_bicycle_project.entity.Report;
 import swp391.old_bicycle_project.entity.User;
+import swp391.old_bicycle_project.entity.Wishlist;
 import swp391.old_bicycle_project.entity.enums.AppRole;
 import swp391.old_bicycle_project.entity.enums.UserStatus;
 import swp391.old_bicycle_project.exception.AppException;
 import swp391.old_bicycle_project.exception.ErrorCode;
+import swp391.old_bicycle_project.repository.ConversationRepository;
+import swp391.old_bicycle_project.repository.NotificationRepository;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
+import swp391.old_bicycle_project.repository.ReportRepository;
 import swp391.old_bicycle_project.repository.UserRepository;
-import swp391.old_bicycle_project.service.AdminUserService;
+import swp391.old_bicycle_project.repository.WishlistRepository;
 import swp391.old_bicycle_project.service.PasswordPolicyValidator;
-import swp391.old_bicycle_project.service.RefreshTokenService;
+import swp391.old_bicycle_project.service.AdminUserService;
 import swp391.old_bicycle_project.specification.UserSpecification;
 import swp391.old_bicycle_project.validation.PaginationValidationUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
+    private final ReportRepository reportRepository;
+    private final NotificationRepository notificationRepository;
+    private final WishlistRepository wishlistRepository;
+    private final ConversationRepository conversationRepository;
     private final PasswordPolicyValidator passwordPolicyValidator;
-    private final RefreshTokenService refreshTokenService;
+    private final swp391.old_bicycle_project.service.RefreshTokenService refreshTokenService;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -49,7 +58,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             int page,
             int size
     ) {
-        Pageable pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by("createdAt").descending());
+        var pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by("createdAt").descending());
         return userRepository.findAll(
                 UserSpecification.fromAdminFilter(keyword, role, status, verified),
                 pageable
@@ -83,19 +92,21 @@ public class AdminUserServiceImpl implements AdminUserService {
         userRepository.save(user);
         refreshTokenService.deleteAllByUser(user);
 
-        return "Password reset successfully. Existing refresh tokens were revoked.";
+        return "Admin da dat lai mat khau va thu hoi cac phien dang nhap cu.";
     }
 
     @Override
     public AdminUserActivityResponseDTO getUserActivity(UUID userId) {
         User user = getRequiredUser(userId);
 
-        Pageable topFive = PaginationValidationUtils.createPageRequest(0, 5, Sort.by("createdAt").descending());
-        List<Product> recentProducts = productRepository.findBySellerIdOrderByCreatedAtDesc(userId, topFive).getContent();
+        var topFive = PaginationValidationUtils.createPageRequest(0, 5, Sort.by("createdAt").descending());
+        List<Product> recentProducts = productRepository.findBySellerIdAndDeletedAtIsNull(userId, topFive).getContent();
         List<Order> recentOrders = orderRepository.findByBuyerIdOrSellerIdOrderByCreatedAtDesc(userId, userId)
                 .stream()
                 .limit(5)
                 .toList();
+        List<Report> recentReports = reportRepository.findByReporterIdOrderByCreatedAtDesc(userId, topFive).getContent();
+        List<Notification> recentNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, topFive).getContent();
 
         return AdminUserActivityResponseDTO.builder()
                 .userId(user.getId())
@@ -108,15 +119,18 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .totalProducts(productRepository.countBySellerId(userId))
                 .totalOrdersAsBuyer(orderRepository.countByBuyerId(userId))
                 .totalOrdersAsSeller(orderRepository.countBySellerId(userId))
-                .totalReportsSubmitted(0)
-                .totalWishlistItems(0)
-                .totalConversations(0)
-                .unreadNotifications(0)
+                .totalReportsSubmitted(reportRepository.countByReporterId(userId))
+                .totalWishlistItems(wishlistRepository.countByUserId(userId))
+                .totalConversations(conversationRepository.countConversationsByUserId(userId))
+                .unreadNotifications(notificationRepository.countByUserIdAndIsReadFalse(userId))
                 .recentProducts(recentProducts.stream().map(this::toRecentProductItem).toList())
                 .recentOrders(recentOrders.stream().map(order -> toRecentOrderItem(order, userId)).toList())
-                .recentReports(List.of())
-                .recentNotifications(List.of())
-                .recentWishlistItems(List.of())
+                .recentReports(recentReports.stream().map(this::toRecentReportItem).toList())
+                .recentNotifications(recentNotifications.stream().map(this::toRecentNotificationItem).toList())
+                .recentWishlistItems(wishlistRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                        .limit(5)
+                        .map(this::toRecentWishlistItem)
+                        .toList())
                 .build();
     }
 
@@ -137,7 +151,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .defaultAddress(user.getDefaultAddress())
                 .role(user.getRole())
                 .status(user.getStatus())
-                .verified(user.isVerified())
+                .isVerified(user.isVerified())
                 .averageRating(user.getAverageRating())
                 .totalReviews(user.getTotalReviews())
                 .createdAt(user.getCreatedAt())
@@ -166,6 +180,36 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .totalAmount(order.getTotalAmount())
                 .involvement(involvement)
                 .createdAt(order.getCreatedAt())
+                .build();
+    }
+
+    private AdminUserActivityResponseDTO.RecentReportItem toRecentReportItem(Report report) {
+        return AdminUserActivityResponseDTO.RecentReportItem.builder()
+                .reportId(report.getId())
+                .targetId(report.getTargetId())
+                .targetType(report.getTargetType())
+                .reason(report.getReason())
+                .status(report.getStatus())
+                .createdAt(report.getCreatedAt())
+                .build();
+    }
+
+    private AdminUserActivityResponseDTO.RecentNotificationItem toRecentNotificationItem(Notification notification) {
+        return AdminUserActivityResponseDTO.RecentNotificationItem.builder()
+                .notificationId(notification.getId())
+                .title(notification.getTitle())
+                .type(notification.getType())
+                .isRead(notification.getIsRead())
+                .createdAt(notification.getCreatedAt())
+                .build();
+    }
+
+    private AdminUserActivityResponseDTO.RecentWishlistItem toRecentWishlistItem(Wishlist wishlist) {
+        return AdminUserActivityResponseDTO.RecentWishlistItem.builder()
+                .productId(wishlist.getProduct().getId())
+                .productTitle(wishlist.getProduct().getTitle())
+                .productStatus(wishlist.getProduct().getStatus())
+                .createdAt(wishlist.getCreatedAt())
                 .build();
     }
 }

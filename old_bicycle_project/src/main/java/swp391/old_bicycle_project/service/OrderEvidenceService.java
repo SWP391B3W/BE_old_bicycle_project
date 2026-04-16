@@ -1,10 +1,10 @@
 package swp391.old_bicycle_project.service;
 
-import org.springframework.web.multipart.MultipartFile;
+import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDTO;
 import swp391.old_bicycle_project.entity.Order;
-import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
 import swp391.old_bicycle_project.entity.User;
 import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collection;
 import java.util.List;
@@ -13,21 +13,21 @@ import java.util.UUID;
 
 public interface OrderEvidenceService {
 
-    OrderEvidenceSubmission createSellerHandoverEvidence(
+    OrderEvidenceSubmissionResponseDTO createSellerHandoverEvidence(
             Order order,
             User submittedBy,
             String note,
             List<MultipartFile> files
     );
 
-    OrderEvidenceSubmission createBuyerReceiptEvidence(
+    OrderEvidenceSubmissionResponseDTO createBuyerReceiptEvidence(
             Order order,
             User submittedBy,
             String note,
             List<MultipartFile> files
     );
 
-    Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmission>> getEvidenceByOrderIds(Collection<UUID> orderIds);
+    Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO>> getEvidenceByOrderIds(Collection<UUID> orderIds);
 
-    Map<OrderEvidenceType, OrderEvidenceSubmission> getEvidenceByOrderId(UUID orderId);
+    Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> getEvidenceByOrderId(UUID orderId);
 }

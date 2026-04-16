@@ -7,11 +7,19 @@ import lombok.Data;
 @Data
 public class ChangePasswordRequest {
 
-    @NotBlank(message = "Mật khẩu hiện tại là bắt buộc")
-    @Size(max = 255, message = "Mật khẩu hiện tại không được vượt quá 255 ký tự")
+    @NotBlank(message = "Current password is required")
+    @Size(max = 255, message = "Current password must not exceed 255 characters")
     private String currentPassword;
 
-    @NotBlank(message = "Mật khẩu mới là bắt buộc")
+    @NotBlank(message = "New password is required")
     @Size(min = 8, message = "INVALID_PASSWORD")
     private String newPassword;
+
+    // Manual Getter
+    public String getCurrentPassword() { return currentPassword; }
+    public String getNewPassword() { return newPassword; }
+
+    // Manual Setter
+    public void setCurrentPassword(String currentPassword) { this.currentPassword = currentPassword; }
+    public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
 }

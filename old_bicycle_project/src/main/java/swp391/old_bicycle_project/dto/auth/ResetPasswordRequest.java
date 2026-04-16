@@ -7,11 +7,19 @@ import lombok.Data;
 @Data
 public class ResetPasswordRequest {
 
-    @NotBlank(message = "Token reset là bắt buộc")
-    @Size(max = 255, message = "Token reset không được vượt quá 255 ký tự")
+    @NotBlank(message = "Reset token is required")
+    @Size(max = 255, message = "Reset token must not exceed 255 characters")
     private String token;
 
-    @NotBlank(message = "Mật khẩu mới là bắt buộc")
+    @NotBlank(message = "New password is required")
     @Size(min = 8, message = "INVALID_PASSWORD")
     private String newPassword;
+
+    // Manual Getter
+    public String getToken() { return token; }
+    public String getNewPassword() { return newPassword; }
+
+    // Manual Setter
+    public void setToken(String token) { this.token = token; }
+    public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
 }

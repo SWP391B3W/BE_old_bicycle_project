@@ -8,8 +8,14 @@ import lombok.Data;
 @Data
 public class ForgotPasswordRequest {
 
-    @NotBlank(message = "Email không được để trống")
-    @Email(message = "Email không hợp lệ")
-    @Size(max = 255, message = "Email không được vượt quá 255 ký tự")
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email is invalid")
+    @Size(max = 255, message = "Email must not exceed 255 characters")
     private String email;
+
+    // Manual Getter
+    public String getEmail() { return email; }
+
+    // Manual Setter
+    public void setEmail(String email) { this.email = email; }
 }

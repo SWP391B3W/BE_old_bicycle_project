@@ -1,4 +1,4 @@
-package swp391.old_bicycle_project.service;
+package swp391.old_bicycle_project.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -10,11 +10,21 @@ import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.OrderEvidenceSubmission;
 import swp391.old_bicycle_project.entity.Product;
 import swp391.old_bicycle_project.entity.User;
-import swp391.old_bicycle_project.entity.enums.*;
+import swp391.old_bicycle_project.entity.enums.AppRole;
+import swp391.old_bicycle_project.entity.enums.OrderCancelReason;
+import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
+import swp391.old_bicycle_project.entity.enums.OrderFundingStatus;
+import swp391.old_bicycle_project.entity.enums.OrderStatus;
+import swp391.old_bicycle_project.entity.enums.PaymentMethod;
+import swp391.old_bicycle_project.entity.enums.PaymentOption;
+import swp391.old_bicycle_project.entity.enums.PlatformFeeStatus;
+import swp391.old_bicycle_project.entity.enums.ProductStatus;
 import swp391.old_bicycle_project.exception.AppException;
 import swp391.old_bicycle_project.exception.ErrorCode;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
+import swp391.old_bicycle_project.service.OrderEvidenceService;
+import swp391.old_bicycle_project.service.OrderService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -45,7 +55,6 @@ public class OrderServiceImpl implements OrderService {
         if (product.getSeller() == null) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
-
         if (product.getSeller().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
@@ -92,11 +101,11 @@ public class OrderServiceImpl implements OrderService {
                 : orderRepository.findByBuyerIdOrSellerIdOrderByCreatedAtDesc(currentUser.getId(), currentUser.getId());
 
         Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmission>> evidenceByOrderId =
-            orderEvidenceService.getEvidenceByOrderIds(orders.stream().map(Order::getId).toList());
+                orderEvidenceService.getEvidenceByOrderIds(orders.stream().map(Order::getId).toList());
 
         return orders.stream()
-            .map(order -> map(order, evidenceByOrderId.getOrDefault(order.getId(), Map.of())))
-            .toList();
+                .map(order -> map(order, evidenceByOrderId.getOrDefault(order.getId(), Map.of())))
+                .toList();
     }
 
     @Override
@@ -185,7 +194,6 @@ public class OrderServiceImpl implements OrderService {
                 || order.getFundingStatus() != OrderFundingStatus.held) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
-
         orderEvidenceService.createBuyerReceiptEvidence(order, currentUser, note, files);
 
         order.setStatus(OrderStatus.completed);

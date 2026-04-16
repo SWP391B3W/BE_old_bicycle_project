@@ -71,12 +71,12 @@ public class StorageServiceImpl implements StorageService {
                 return buildPublicUrl(normalizedBucket, path);
             }
 
-            throw new RuntimeException("Upload file tháº¥t báº¡i: " + response.statusCode());
+            throw new RuntimeException("Upload file thất bại: " + response.statusCode());
         } catch (IOException exception) {
-            throw new RuntimeException("KhÃ´ng thá»ƒ Ä‘á»c file: " + exception.getMessage(), exception);
+            throw new RuntimeException("Không thể đọc file: " + exception.getMessage(), exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Upload file bá»‹ giÃ¡n Ä‘oáº¡n", exception);
+            throw new RuntimeException("Upload file bị gián đoạn", exception);
         }
     }
 

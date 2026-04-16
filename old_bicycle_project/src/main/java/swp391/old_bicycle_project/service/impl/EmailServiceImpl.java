@@ -97,7 +97,7 @@ public class EmailServiceImpl implements EmailService {
     public void sendVerificationEmail(User user, String token) {
         sendEmail(
                 user.getEmail(),
-                "XÃ¡c thá»±c tÃ i khoáº£n - Old Bicycles Marketplace",
+                "Xác thực tài khoản - Old Bicycles Marketplace",
                 renderTemplate("email-verification.html", Map.of(
                         "displayName", resolveDisplayName(user),
                         "actionUrl", buildFrontendActionUrl("/verify-email", token)
@@ -110,7 +110,7 @@ public class EmailServiceImpl implements EmailService {
     public void sendPasswordResetEmail(User user, String token) {
         sendEmail(
                 user.getEmail(),
-                "Äáº·t láº¡i máº­t kháº©u - Old Bicycles Marketplace",
+                "Đặt lại mật khẩu - Old Bicycles Marketplace",
                 renderTemplate("password-reset.html", Map.of(
                         "displayName", resolveDisplayName(user),
                         "actionUrl", buildFrontendActionUrl("/reset-password", token)

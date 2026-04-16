@@ -87,7 +87,7 @@ public class AuthServiceImpl implements AuthService {
         EmailVerification verificationToken = emailService.createVerificationToken(user);
         emailService.sendVerificationEmail(user, verificationToken.getToken());
 
-        return "ÄÄƒng kÃ½ thÃ nh cÃ´ng. Vui lÃ²ng kiá»ƒm tra email Ä‘á»ƒ xÃ¡c thá»±c tÃ i khoáº£n.";
+        return "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.";
     }
 
     @Override
@@ -102,7 +102,7 @@ public class AuthServiceImpl implements AuthService {
                     emailService.sendVerificationEmail(user, verificationToken.getToken());
                 });
 
-        return "Náº¿u tÃ i khoáº£n tá»“n táº¡i vÃ  chÆ°a Ä‘Æ°á»£c xÃ¡c thá»±c, há»‡ thá»‘ng Ä‘Ã£ gá»­i láº¡i email xÃ¡c thá»±c.";
+        return "Nếu tài khoản tồn tại và chưa được xác thực, hệ thống đã gửi lại email xác thực.";
     }
 
     @Override
@@ -157,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
                     emailService.sendPasswordResetEmail(user, passwordResetToken.getToken());
                 });
 
-        return "Náº¿u email tá»“n táº¡i, há»‡ thá»‘ng Ä‘Ã£ gá»­i hÆ°á»›ng dáº«n Ä‘áº·t láº¡i máº­t kháº©u.";
+        return "Nếu email tồn tại, hệ thống đã gửi hướng dẫn đặt lại mật khẩu.";
     }
 
     @Override
@@ -180,7 +180,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.deleteAllByUser(user);
         emailService.deletePasswordResetTokensByUser(user);
 
-        return "ÄÃ£ Ä‘áº·t láº¡i máº­t kháº©u thÃ nh cÃ´ng. Vui lÃ²ng Ä‘Äƒng nháº­p láº¡i.";
+        return "Đã đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.";
     }
 
     @Override
@@ -207,14 +207,14 @@ public class AuthServiceImpl implements AuthService {
 
         User user = verification.getUser();
         if (user.isVerified()) {
-            return "TÃ i khoáº£n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c thá»±c trÆ°á»›c Ä‘Ã³.";
+            return "Tài khoản đã được xác thực trước đó.";
         }
 
         user.setVerified(true);
         userRepository.save(user);
         emailService.deleteByUser(user);
 
-        return "ÄÃ£ xÃ¡c thá»±c email thÃ nh cÃ´ng. Vui lÃ²ng Ä‘Äƒng nháº­p láº¡i.";
+        return "Đã xác thực email thành công. Vui lòng đăng nhập lại.";
     }
 
     @Override
@@ -260,7 +260,7 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
         refreshTokenService.deleteAllByUser(user);
 
-        return "ÄÃ£ Ä‘á»•i máº­t kháº©u thÃ nh cÃ´ng. CÃ¡c phiÃªn Ä‘Äƒng nháº­p cÅ© Ä‘Ã£ bá»‹ thu há»“i.";
+        return "Đã đổi mật khẩu thành công. Các phiên đăng nhập cũ đã bị thu hồi.";
     }
 
     private AuthResponse buildAuthResponse(User user, String accessToken, String refreshToken) {

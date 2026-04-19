@@ -55,23 +55,31 @@ public class StorageServiceImpl implements StorageService {
         String normalizedFolder = normalizeFolder(folder);
         String filename = UUID.randomUUID() + "_" + sanitizeFilename(file.getOriginalFilename());
         String path = normalizedFolder + "/" + filename;
+        String apiKey = resolveStorageApiKey();
+        String bearerToken = resolveBearerToken(apiKey);
 
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(buildObjectUrl(normalizedBucket, path)))
                     .timeout(Duration.ofSeconds(30))
-                    .header("apikey", resolveStorageApiKey())
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + resolveStorageApiKey())
                     .header(HttpHeaders.CONTENT_TYPE, resolveContentType(file.getContentType()).toString())
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(file.getBytes()))
-                    .build();
+                    .header("apikey", apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(file.getBytes()));
+
+            if (bearerToken != null) {
+                requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken);
+            }
+
+            HttpRequest request = requestBuilder.build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 return buildPublicUrl(normalizedBucket, path);
             }
 
-            throw new RuntimeException("Upload file thất bại: " + response.statusCode());
+            String responseBody = response.body() == null ? "" : response.body().trim();
+            throw new RuntimeException("Upload file thất bại: HTTP " + response.statusCode()
+                    + (responseBody.isEmpty() ? "" : " - " + responseBody));
         } catch (IOException exception) {
             throw new RuntimeException("Không thể đọc file: " + exception.getMessage(), exception);
         } catch (InterruptedException exception) {
@@ -87,14 +95,21 @@ public class StorageServiceImpl implements StorageService {
             return;
         }
 
+        String apiKey = resolveStorageApiKey();
+        String bearerToken = resolveBearerToken(apiKey);
+
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(buildObjectUrl(storageObjectLocation.bucket(), storageObjectLocation.path())))
                     .timeout(Duration.ofSeconds(15))
-                    .header("apikey", resolveStorageApiKey())
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + resolveStorageApiKey())
-                    .DELETE()
-                    .build();
+                    .header("apikey", apiKey)
+                    .DELETE();
+
+            if (bearerToken != null) {
+                requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken);
+            }
+
+            HttpRequest request = requestBuilder.build();
 
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception ignored) {
@@ -108,6 +123,32 @@ public class StorageServiceImpl implements StorageService {
             return supabaseServiceRoleKey;
         }
         return supabaseAnonKey;
+    }
+
+    private String resolveBearerToken(String selectedApiKey) {
+        if (isJwtLike(selectedApiKey)) {
+            return selectedApiKey;
+        }
+
+        if (isJwtLike(supabaseAnonKey)) {
+            return supabaseAnonKey;
+        }
+
+        return null;
+    }
+
+    private boolean isJwtLike(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+
+        int dotCount = 0;
+        for (int index = 0; index < token.length(); index++) {
+            if (token.charAt(index) == '.') {
+                dotCount++;
+            }
+        }
+        return dotCount == 2;
     }
 
     private String normalizeBucket(String bucketName) {
@@ -180,15 +221,15 @@ public class StorageServiceImpl implements StorageService {
     }
 
     private String buildObjectUrl(String bucketName, String path) {
-        return supabaseUrl + PRIVATE_OBJECT_PATH + bucketName + "/" + path;
+        return normalizeSupabaseUrl() + PRIVATE_OBJECT_PATH + bucketName + "/" + path;
     }
 
     private String buildPublicUrl(String bucketName, String path) {
-        return supabaseUrl + PUBLIC_OBJECT_PATH + bucketName + "/" + path;
+        return normalizeSupabaseUrl() + PUBLIC_OBJECT_PATH + bucketName + "/" + path;
     }
 
     private StorageObjectLocation resolveStorageObjectLocation(String fileUrl) {
-        String publicPrefix = supabaseUrl + PUBLIC_OBJECT_PATH;
+        String publicPrefix = normalizeSupabaseUrl() + PUBLIC_OBJECT_PATH;
         if (fileUrl == null || !fileUrl.startsWith(publicPrefix)) {
             return null;
         }
@@ -203,6 +244,18 @@ public class StorageServiceImpl implements StorageService {
                 relativePath.substring(0, firstSlashIndex),
                 relativePath.substring(firstSlashIndex + 1)
         );
+    }
+
+    private String normalizeSupabaseUrl() {
+        if (supabaseUrl == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST_BODY);
+        }
+
+        String normalizedUrl = supabaseUrl.trim();
+        if (normalizedUrl.endsWith("/")) {
+            normalizedUrl = normalizedUrl.substring(0, normalizedUrl.length() - 1);
+        }
+        return normalizedUrl;
     }
 
     private record StorageObjectLocation(String bucket, String path) {

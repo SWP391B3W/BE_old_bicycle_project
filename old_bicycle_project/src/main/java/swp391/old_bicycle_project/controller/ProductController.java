@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -127,10 +128,12 @@ public class ProductController {
     public ApiResponse<ProductResponse> createProduct(
             @Valid @ModelAttribute ProductCreateRequest request,
             @RequestPart(value = "images", required = false) List<MultipartFile> images,
+            @RequestPart(value = "images[]", required = false) List<MultipartFile> imagesArray,
             @AuthenticationPrincipal User currentUser
     ) {
+        List<MultipartFile> mergedImages = mergeFiles(images, imagesArray);
         return ApiResponse.<ProductResponse>builder()
-                .result(productService.create(request, images, currentUser))
+                .result(productService.create(request, mergedImages, currentUser))
                 .build();
     }
 
@@ -140,11 +143,24 @@ public class ProductController {
             @PathVariable UUID id,
             @Valid @ModelAttribute ProductUpdateRequest request,
             @RequestPart(value = "images", required = false) List<MultipartFile> newImages,
+            @RequestPart(value = "images[]", required = false) List<MultipartFile> newImagesArray,
             @AuthenticationPrincipal User currentUser
     ) {
+        List<MultipartFile> mergedImages = mergeFiles(newImages, newImagesArray);
         return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, request, newImages, currentUser))
+                .result(productService.update(id, request, mergedImages, currentUser))
                 .build();
+    }
+
+    private List<MultipartFile> mergeFiles(List<MultipartFile> first, List<MultipartFile> second) {
+        List<MultipartFile> merged = new ArrayList<>();
+        if (first != null && !first.isEmpty()) {
+            merged.addAll(first);
+        }
+        if (second != null && !second.isEmpty()) {
+            merged.addAll(second);
+        }
+        return merged;
     }
 
     @DeleteMapping("/{id}")

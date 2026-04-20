@@ -12,9 +12,7 @@ import java.math.RoundingMode;
 public class PlatformFeeServiceImpl implements PlatformFeeService {
 
     private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.1000");
-    private static final BigDecimal ONE_THOUSAND = new BigDecimal("1000");
-    private static final BigDecimal MIN_PLATFORM_FEE = new BigDecimal("1000");
-    private static final BigDecimal MAX_PLATFORM_FEE = new BigDecimal("500000");
+
     @Override
     public PlatformFeeQuote calculate(BigDecimal totalAmount, BigDecimal protectedAmount, PaymentMethod paymentMethod) {
         BigDecimal normalizedTotalAmount = normalize(totalAmount);
@@ -35,11 +33,9 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
                     PlatformFeeStatus.not_applicable);
         }
 
-        BigDecimal rawPlatformFee = normalizedTotalAmount.multiply(PLATFORM_FEE_RATE);
-        BigDecimal roundedPlatformFee = rawPlatformFee
-                .divide(ONE_THOUSAND, 0, RoundingMode.HALF_UP)
-                .multiply(ONE_THOUSAND);
-        BigDecimal platformFeeTotal = clamp(roundedPlatformFee, MIN_PLATFORM_FEE, MAX_PLATFORM_FEE);
+        BigDecimal platformFeeTotal = normalizedTotalAmount
+            .multiply(PLATFORM_FEE_RATE)
+            .setScale(0, RoundingMode.HALF_UP);
         BigDecimal buyerFeeAmount = BigDecimal.ZERO;
         BigDecimal sellerFeeAmount = platformFeeTotal;
         BigDecimal buyerChargeAmount = normalizedProtectedAmount;
@@ -64,15 +60,5 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
 
     private BigDecimal normalize(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
-    }
-
-    private BigDecimal clamp(BigDecimal value, BigDecimal min, BigDecimal max) {
-        if (value.compareTo(min) < 0) {
-            return min;
-        }
-        if (value.compareTo(max) > 0) {
-            return max;
-        }
-        return value;
     }
 }

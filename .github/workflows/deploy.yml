@@ -18,10 +18,11 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: maven
 
       - name: Build application jar
+        working-directory: old_bicycle_project
         run: ./mvnw -q -DskipTests clean package
 
       - name: Prepare SSH key
@@ -33,7 +34,7 @@ jobs:
 
       - name: Copy jar to VPS
         run: |
-          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=yes target/old_bicycle_project-0.0.1-SNAPSHOT.jar \
+          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=yes old_bicycle_project/target/old_bicycle_project-0.0.1-SNAPSHOT.jar \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/home/ec2-user/marketbike/app.jar.new
 
       - name: Deploy with backup and health check

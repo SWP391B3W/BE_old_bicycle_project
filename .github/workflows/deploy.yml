@@ -23,7 +23,9 @@ jobs:
 
       - name: Build application jar
         working-directory: old_bicycle_project
-        run: ./mvnw -q -DskipTests clean package
+        run: |
+          chmod +x mvnw
+          ./mvnw -q -DskipTests clean package
 
       - name: Prepare SSH key
         run: |

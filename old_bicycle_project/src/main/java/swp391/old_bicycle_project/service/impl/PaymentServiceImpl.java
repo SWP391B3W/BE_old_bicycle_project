@@ -19,6 +19,7 @@ import swp391.old_bicycle_project.repository.FinancialTransactionRepository;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.PaymentRepository;
 import swp391.old_bicycle_project.repository.RefundRequestRepository;
+import swp391.old_bicycle_project.service.PlatformFeeService;
 import swp391.old_bicycle_project.service.PaymentService;
 import swp391.old_bicycle_project.service.PayoutService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +40,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final SepayProperties sepayProperties;
+    private final PlatformFeeService platformFeeService;
     private final PaymentGatewaySupport paymentGatewaySupport;
     private final PaymentWebhookSupport paymentWebhookSupport;
     private final PaymentSettlementSupport paymentSettlementSupport;
@@ -49,6 +51,7 @@ public class PaymentServiceImpl implements PaymentService {
             RefundRequestRepository refundRequestRepository,
             FinancialTransactionRepository financialTransactionRepository,
             SepayProperties sepayProperties,
+            PlatformFeeService platformFeeService,
             ObjectMapper objectMapper,
             ApplicationEventPublisher eventPublisher,
             RestTemplate restTemplate,
@@ -57,6 +60,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.sepayProperties = sepayProperties;
+        this.platformFeeService = platformFeeService;
         this.paymentGatewaySupport = new PaymentGatewaySupport(sepayProperties, objectMapper, restTemplate);
         this.paymentWebhookSupport = new PaymentWebhookSupport(paymentRepository, sepayProperties, objectMapper);
         this.paymentSettlementSupport = new PaymentSettlementSupport(
@@ -236,14 +240,24 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private BigDecimal resolveBuyerChargeAmount(Order order) {
-        if (order.getBuyerChargeAmount() != null && order.getBuyerChargeAmount().compareTo(BigDecimal.ZERO) > 0) {
-            return order.getBuyerChargeAmount();
+        PlatformFeeService.PlatformFeeQuote quote = resolveQuote(order);
+        if (quote.buyerChargeAmount() != null && quote.buyerChargeAmount().compareTo(BigDecimal.ZERO) > 0) {
+            return quote.buyerChargeAmount();
         }
-        return order.getRequiredUpfrontAmount();
+        return order.getRequiredUpfrontAmount() != null ? order.getRequiredUpfrontAmount() : BigDecimal.ZERO;
     }
 
     private BigDecimal resolveBuyerFeeAmount(Order order) {
-        return order.getBuyerFeeAmount() != null ? order.getBuyerFeeAmount() : BigDecimal.ZERO;
+        PlatformFeeService.PlatformFeeQuote quote = resolveQuote(order);
+        return quote.buyerFeeAmount() != null ? quote.buyerFeeAmount() : BigDecimal.ZERO;
+    }
+
+    private PlatformFeeService.PlatformFeeQuote resolveQuote(Order order) {
+        return platformFeeService.calculate(
+                order.getTotalAmount(),
+                order.getRequiredUpfrontAmount(),
+                order.getPaymentMethod()
+        );
     }
 
     private PaymentResponseDTO mapToDTO(Payment payment) {

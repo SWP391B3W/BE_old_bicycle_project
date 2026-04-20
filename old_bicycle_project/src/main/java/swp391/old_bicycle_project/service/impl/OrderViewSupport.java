@@ -4,8 +4,11 @@ import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDT
 import swp391.old_bicycle_project.dto.response.OrderResponseDTO;
 import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
+import swp391.old_bicycle_project.entity.enums.OrderFundingStatus;
+import swp391.old_bicycle_project.entity.enums.OrderStatus;
 import swp391.old_bicycle_project.repository.ReviewRepository;
 import swp391.old_bicycle_project.service.OrderEvidenceService;
+import swp391.old_bicycle_project.service.PlatformFeeService;
 
 import java.util.Collections;
 import java.util.List;
@@ -17,10 +20,16 @@ final class OrderViewSupport {
 
     private final ReviewRepository reviewRepository;
     private final OrderEvidenceService orderEvidenceService;
+        private final PlatformFeeService platformFeeService;
 
-    OrderViewSupport(ReviewRepository reviewRepository, OrderEvidenceService orderEvidenceService) {
+        OrderViewSupport(
+                        ReviewRepository reviewRepository,
+                        OrderEvidenceService orderEvidenceService,
+                        PlatformFeeService platformFeeService
+        ) {
         this.reviewRepository = reviewRepository;
         this.orderEvidenceService = orderEvidenceService;
+                this.platformFeeService = platformFeeService;
     }
 
     List<OrderResponseDTO> mapOrders(List<Order> orders) {
@@ -59,6 +68,14 @@ final class OrderViewSupport {
             boolean buyerReviewSubmitted,
             Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> evidenceByType
     ) {
+        PlatformFeeService.PlatformFeeQuote feeQuote = shouldNormalizeFeeSnapshot(order)
+                ? platformFeeService.calculate(
+                        order.getTotalAmount(),
+                        order.getRequiredUpfrontAmount(),
+                        order.getPaymentMethod()
+                )
+                : null;
+
         return OrderResponseDTO.builder()
                 .id(order.getId())
                 .productId(order.getProduct().getId())
@@ -72,16 +89,16 @@ final class OrderViewSupport {
                 .requiredUpfrontAmount(order.getRequiredUpfrontAmount())
                 .paidAmount(order.getPaidAmount())
                 .remainingAmount(order.getRemainingAmount())
-                .serviceFee(order.getServiceFee())
-                .feeBaseAmount(order.getFeeBaseAmount())
-                .platformFeeRate(order.getPlatformFeeRate())
-                .platformFeeTotal(order.getPlatformFeeTotal())
-                .buyerFeeAmount(order.getBuyerFeeAmount())
-                .sellerFeeAmount(order.getSellerFeeAmount())
-                .buyerChargeAmount(order.getBuyerChargeAmount())
-                .sellerGrossPayoutAmount(order.getSellerGrossPayoutAmount())
-                .sellerNetPayoutAmount(order.getSellerNetPayoutAmount())
-                .platformFeeStatus(order.getPlatformFeeStatus())
+                .serviceFee(feeQuote != null ? feeQuote.platformFeeTotal() : order.getServiceFee())
+                .feeBaseAmount(feeQuote != null ? feeQuote.feeBaseAmount() : order.getFeeBaseAmount())
+                .platformFeeRate(feeQuote != null ? feeQuote.platformFeeRate() : order.getPlatformFeeRate())
+                .platformFeeTotal(feeQuote != null ? feeQuote.platformFeeTotal() : order.getPlatformFeeTotal())
+                .buyerFeeAmount(feeQuote != null ? feeQuote.buyerFeeAmount() : order.getBuyerFeeAmount())
+                .sellerFeeAmount(feeQuote != null ? feeQuote.sellerFeeAmount() : order.getSellerFeeAmount())
+                .buyerChargeAmount(feeQuote != null ? feeQuote.buyerChargeAmount() : order.getBuyerChargeAmount())
+                .sellerGrossPayoutAmount(feeQuote != null ? feeQuote.sellerGrossPayoutAmount() : order.getSellerGrossPayoutAmount())
+                .sellerNetPayoutAmount(feeQuote != null ? feeQuote.sellerNetPayoutAmount() : order.getSellerNetPayoutAmount())
+                .platformFeeStatus(feeQuote != null ? feeQuote.platformFeeStatus() : order.getPlatformFeeStatus())
                 .platformFeeRecognizedAt(order.getPlatformFeeRecognizedAt())
                 .platformFeeReversedAt(order.getPlatformFeeReversedAt())
                 .paymentOption(order.getPaymentOption())
@@ -100,4 +117,12 @@ final class OrderViewSupport {
                 .updatedAt(order.getUpdatedAt())
                 .build();
     }
+
+        private boolean shouldNormalizeFeeSnapshot(Order order) {
+                if (order.getStatus() != OrderStatus.pending) {
+                        return false;
+                }
+                return order.getFundingStatus() == OrderFundingStatus.unpaid
+                                || order.getFundingStatus() == OrderFundingStatus.awaiting_payment;
+        }
 }

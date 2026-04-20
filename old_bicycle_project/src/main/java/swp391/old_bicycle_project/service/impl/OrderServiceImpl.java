@@ -65,7 +65,7 @@ public class OrderServiceImpl implements OrderService {
         this.orderEvidenceService = orderEvidenceService;
         this.platformFeeService = platformFeeService;
         this.orderTransitionSupport = new OrderTransitionSupport(orderRepository, productRepository, eventPublisher);
-        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService);
+        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService, platformFeeService);
     }
 
     @Override

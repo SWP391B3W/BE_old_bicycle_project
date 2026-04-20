@@ -4,8 +4,7 @@ import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDT
 import swp391.old_bicycle_project.dto.response.OrderResponseDTO;
 import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
-import swp391.old_bicycle_project.entity.enums.OrderFundingStatus;
-import swp391.old_bicycle_project.entity.enums.OrderStatus;
+import swp391.old_bicycle_project.entity.enums.PaymentMethod;
 import swp391.old_bicycle_project.repository.ReviewRepository;
 import swp391.old_bicycle_project.service.OrderEvidenceService;
 import swp391.old_bicycle_project.service.PlatformFeeService;
@@ -98,7 +97,7 @@ final class OrderViewSupport {
                 .buyerChargeAmount(feeQuote != null ? feeQuote.buyerChargeAmount() : order.getBuyerChargeAmount())
                 .sellerGrossPayoutAmount(feeQuote != null ? feeQuote.sellerGrossPayoutAmount() : order.getSellerGrossPayoutAmount())
                 .sellerNetPayoutAmount(feeQuote != null ? feeQuote.sellerNetPayoutAmount() : order.getSellerNetPayoutAmount())
-                .platformFeeStatus(feeQuote != null ? feeQuote.platformFeeStatus() : order.getPlatformFeeStatus())
+                .platformFeeStatus(order.getPlatformFeeStatus())
                 .platformFeeRecognizedAt(order.getPlatformFeeRecognizedAt())
                 .platformFeeReversedAt(order.getPlatformFeeReversedAt())
                 .paymentOption(order.getPaymentOption())
@@ -119,10 +118,12 @@ final class OrderViewSupport {
     }
 
         private boolean shouldNormalizeFeeSnapshot(Order order) {
-                if (order.getStatus() != OrderStatus.pending) {
+                if (order.getPaymentMethod() == null || order.getPaymentMethod() == PaymentMethod.cash) {
                         return false;
                 }
-                return order.getFundingStatus() == OrderFundingStatus.unpaid
-                                || order.getFundingStatus() == OrderFundingStatus.awaiting_payment;
+                return (order.getBuyerFeeAmount() != null && order.getBuyerFeeAmount().compareTo(java.math.BigDecimal.ZERO) > 0)
+                                || (order.getBuyerChargeAmount() != null
+                                && order.getRequiredUpfrontAmount() != null
+                                && order.getBuyerChargeAmount().compareTo(order.getRequiredUpfrontAmount()) > 0);
         }
 }

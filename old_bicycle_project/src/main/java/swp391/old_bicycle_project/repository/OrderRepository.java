@@ -72,6 +72,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             LocalDateTime paymentDeadline
     );
 
+    List<Order> findByStatusAndFundingStatusAndBuyerConfirmationDeadlineBefore(
+            OrderStatus status,
+            OrderFundingStatus fundingStatus,
+            LocalDateTime buyerConfirmationDeadline
+    );
+
     @Query("SELECT SUM(o.totalAmount) FROM Order o WHERE o.status = :status")
     BigDecimal sumTotalAmountByStatus(@Param("status") OrderStatus status);
 

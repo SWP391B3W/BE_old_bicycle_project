@@ -11,12 +11,10 @@ import java.math.RoundingMode;
 @Service
 public class PlatformFeeServiceImpl implements PlatformFeeService {
 
-    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.0200");
+    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.1000");
     private static final BigDecimal ONE_THOUSAND = new BigDecimal("1000");
     private static final BigDecimal MIN_PLATFORM_FEE = new BigDecimal("1000");
     private static final BigDecimal MAX_PLATFORM_FEE = new BigDecimal("500000");
-    private static final BigDecimal TWO = new BigDecimal("2");
-
     @Override
     public PlatformFeeQuote calculate(BigDecimal totalAmount, BigDecimal protectedAmount, PaymentMethod paymentMethod) {
         BigDecimal normalizedTotalAmount = normalize(totalAmount);
@@ -42,9 +40,9 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
                 .divide(ONE_THOUSAND, 0, RoundingMode.HALF_UP)
                 .multiply(ONE_THOUSAND);
         BigDecimal platformFeeTotal = clamp(roundedPlatformFee, MIN_PLATFORM_FEE, MAX_PLATFORM_FEE);
-        BigDecimal buyerFeeAmount = platformFeeTotal.divide(TWO, 0, RoundingMode.HALF_UP);
-        BigDecimal sellerFeeAmount = platformFeeTotal.subtract(buyerFeeAmount);
-        BigDecimal buyerChargeAmount = normalizedProtectedAmount.add(buyerFeeAmount);
+        BigDecimal buyerFeeAmount = BigDecimal.ZERO;
+        BigDecimal sellerFeeAmount = platformFeeTotal;
+        BigDecimal buyerChargeAmount = normalizedProtectedAmount;
         BigDecimal sellerGrossPayoutAmount = normalizedProtectedAmount;
         BigDecimal sellerNetPayoutAmount = normalizedProtectedAmount.subtract(sellerFeeAmount);
 

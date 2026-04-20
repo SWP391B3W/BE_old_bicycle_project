@@ -76,7 +76,7 @@ public class OrderController {
 
     @PatchMapping(value = "/{orderId}/complete", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SELLER', 'ADMIN')")
-    @Operation(summary = "Người bán báo đã giao xe")
+    @Operation(summary = "Người bán xác nhận đã gửi hàng")
     public ApiResponse<OrderResponseDTO> completeOrder(
             @PathVariable UUID orderId,
             @AuthenticationPrincipal User currentUser,
@@ -86,7 +86,7 @@ public class OrderController {
         List<MultipartFile> mergedFiles = mergeFiles(files, filesArray);
         return ApiResponse.<OrderResponseDTO>builder()
                 .code(200)
-                .message("Delivery reported successfully")
+                .message("Shipment confirmed successfully")
                 .result(orderService.completeOrder(orderId, currentUser, note, mergedFiles))
                 .build();
     }
@@ -110,7 +110,7 @@ public class OrderController {
 
     @PatchMapping("/{orderId}/cancel")
     @PreAuthorize("hasAnyRole('BUYER', 'SELLER', 'ADMIN')")
-    @Operation(summary = "Huỷ đơn")
+    @Operation(summary = "Hủy đơn")
     public ApiResponse<OrderResponseDTO> cancelOrder(
             @PathVariable UUID orderId,
             @AuthenticationPrincipal User currentUser) {
@@ -121,14 +121,14 @@ public class OrderController {
                 .build();
     }
 
-        private List<MultipartFile> mergeFiles(List<MultipartFile> first, List<MultipartFile> second) {
-                List<MultipartFile> merged = new ArrayList<>();
-                if (first != null && !first.isEmpty()) {
-                        merged.addAll(first);
-                }
-                if (second != null && !second.isEmpty()) {
-                        merged.addAll(second);
-                }
-                return merged;
+    private List<MultipartFile> mergeFiles(List<MultipartFile> first, List<MultipartFile> second) {
+        List<MultipartFile> merged = new ArrayList<>();
+        if (first != null && !first.isEmpty()) {
+            merged.addAll(first);
         }
+        if (second != null && !second.isEmpty()) {
+            merged.addAll(second);
+        }
+        return merged;
+    }
 }

@@ -93,6 +93,7 @@ final class OrderViewSupport {
                 .buyerReceiptEvidence(evidenceByType.get(OrderEvidenceType.buyer_receipt))
                 .acceptedAt(order.getAcceptedAt())
                 .paymentDeadline(order.getPaymentDeadline())
+                .buyerConfirmationDeadline(order.getBuyerConfirmationDeadline())
                 .cancelReason(order.getCancelReason())
                 .cancelledAt(order.getCancelledAt())
                 .createdAt(order.getCreatedAt())

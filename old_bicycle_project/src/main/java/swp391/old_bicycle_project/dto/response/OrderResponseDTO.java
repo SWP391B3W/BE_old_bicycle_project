@@ -53,6 +53,7 @@ public class OrderResponseDTO {
     private OrderEvidenceSubmissionResponseDTO buyerReceiptEvidence;
     private LocalDateTime acceptedAt;
     private LocalDateTime paymentDeadline;
+    private LocalDateTime buyerConfirmationDeadline;
     private OrderCancelReason cancelReason;
     private LocalDateTime cancelledAt;
     private LocalDateTime createdAt;
@@ -97,6 +98,7 @@ public class OrderResponseDTO {
         public OrderResponseDTOBuilder buyerReceiptEvidence(OrderEvidenceSubmissionResponseDTO e) { k.buyerReceiptEvidence = e; return this; }
         public OrderResponseDTOBuilder acceptedAt(LocalDateTime d) { k.acceptedAt = d; return this; }
         public OrderResponseDTOBuilder paymentDeadline(LocalDateTime d) { k.paymentDeadline = d; return this; }
+        public OrderResponseDTOBuilder buyerConfirmationDeadline(LocalDateTime d) { k.buyerConfirmationDeadline = d; return this; }
         public OrderResponseDTOBuilder cancelReason(OrderCancelReason r) { k.cancelReason = r; return this; }
         public OrderResponseDTOBuilder cancelledAt(LocalDateTime d) { k.cancelledAt = d; return this; }
         public OrderResponseDTOBuilder createdAt(LocalDateTime d) { k.createdAt = d; return this; }

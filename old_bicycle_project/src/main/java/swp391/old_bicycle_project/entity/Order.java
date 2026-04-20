@@ -132,6 +132,9 @@ public class Order {
     @Column(name = "payment_deadline")
     private LocalDateTime paymentDeadline;
 
+    @Column(name = "buyer_confirmation_deadline")
+    private LocalDateTime buyerConfirmationDeadline;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "cancel_reason")
     private OrderCancelReason cancelReason;
@@ -175,6 +178,7 @@ public class Order {
     public PaymentOption getPaymentOption() { return paymentOption; }
     public LocalDateTime getAcceptedAt() { return acceptedAt; }
     public LocalDateTime getPaymentDeadline() { return paymentDeadline; }
+    public LocalDateTime getBuyerConfirmationDeadline() { return buyerConfirmationDeadline; }
     public OrderCancelReason getCancelReason() { return cancelReason; }
     public LocalDateTime getCancelledAt() { return cancelledAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -199,6 +203,7 @@ public class Order {
     public void setPaymentMethod(PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
     public void setAcceptedAt(LocalDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
     public void setPaymentDeadline(LocalDateTime paymentDeadline) { this.paymentDeadline = paymentDeadline; }
+    public void setBuyerConfirmationDeadline(LocalDateTime buyerConfirmationDeadline) { this.buyerConfirmationDeadline = buyerConfirmationDeadline; }
     public void setCancelReason(OrderCancelReason cancelReason) { this.cancelReason = cancelReason; }
     public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
 
@@ -229,6 +234,7 @@ public class Order {
         public OrderBuilder status(OrderStatus status) { r.status = status; return this; }
         public OrderBuilder fundingStatus(OrderFundingStatus fundingStatus) { r.fundingStatus = fundingStatus; return this; }
         public OrderBuilder paymentMethod(PaymentMethod paymentMethod) { r.paymentMethod = paymentMethod; return this; }
+        public OrderBuilder buyerConfirmationDeadline(LocalDateTime buyerConfirmationDeadline) { r.buyerConfirmationDeadline = buyerConfirmationDeadline; return this; }
         public Order build() { return r; }
     }
 }

@@ -53,22 +53,22 @@ jobs:
             mv -f app.jar.new app.jar
             sudo systemctl restart marketbike
             
-            # Wait for app to be ready (retry up to 30 seconds)
-            max_attempts=15
+            # Wait for app to be ready (retry up to 60 seconds, every 3s)
+            max_attempts=20
             attempt=0
             while [ $attempt -lt $max_attempts ]; do
-              sleep 2
+              sleep 3
               if curl -fsS http://127.0.0.1:8080/v3/api-docs >/dev/null 2>&1; then
-                echo "✓ Health check passed"
+                echo "✓ Health check passed after $attempt attempts"
                 rm -f app.jar.bak
                 exit 0
               fi
               attempt=$((attempt + 1))
-              echo "Waiting for app... (attempt $attempt/$max_attempts)"
+              echo "⏳ Waiting for app startup... (attempt $attempt/$max_attempts, ~$((attempt * 3))s elapsed)"
             done
             
             # Health check failed after max attempts
-            echo "✗ Health check failed after $max_attempts attempts"
+            echo "✗ Health check failed after $max_attempts attempts (~60 seconds)"
             if [ -f app.jar.bak ]; then
               echo "Rolling back to previous version..."
               mv -f app.jar.bak app.jar

@@ -62,6 +62,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     long countBySellerId(UUID sellerId);
 
+    long countByStatusNot(OrderStatus status);
+
     List<Order> findAllByOrderByCreatedAtDesc();
 
     java.util.Optional<Order> findByIdAndBuyerId(UUID orderId, UUID buyerId);

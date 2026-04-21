@@ -3,6 +3,7 @@ package swp391.old_bicycle_project.service.impl;
 import swp391.old_bicycle_project.dto.response.DashboardStatsDTO;
 import swp391.old_bicycle_project.entity.enums.OrderStatus;
 import swp391.old_bicycle_project.entity.enums.PlatformFeeStatus;
+import swp391.old_bicycle_project.entity.enums.UserStatus;
 import swp391.old_bicycle_project.repository.InspectionRepository;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
@@ -28,9 +29,9 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     public DashboardStatsDTO getDashboardStats() {
 
-        long totalUsers = userRepository.count();
-        long totalProducts = productRepository.count();
-        long totalOrders = orderRepository.count();
+        long totalUsers = userRepository.countByStatus(UserStatus.active);
+        long totalProducts = productRepository.countByDeletedAtIsNull();
+        long totalOrders = orderRepository.countByStatusNot(OrderStatus.cancelled);
 
         BigDecimal totalGmv = defaultZero(orderRepository.sumTotalAmountByStatus(OrderStatus.completed));
         BigDecimal pendingPlatformFee = defaultZero(

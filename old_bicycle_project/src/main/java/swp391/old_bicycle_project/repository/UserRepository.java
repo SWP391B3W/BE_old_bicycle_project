@@ -2,6 +2,7 @@ package swp391.old_bicycle_project.repository;
 
 import swp391.old_bicycle_project.entity.User;
 import swp391.old_bicycle_project.entity.enums.AppRole;
+import swp391.old_bicycle_project.entity.enums.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -15,4 +16,5 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
     List<User> findByRole(AppRole role);
+    long countByStatus(UserStatus status);
 }

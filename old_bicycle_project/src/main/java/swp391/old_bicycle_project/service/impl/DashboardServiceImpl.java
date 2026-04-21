@@ -43,7 +43,7 @@ public class DashboardServiceImpl implements DashboardService {
                 orderRepository.sumPlatformFeeTotalByPlatformFeeStatus(PlatformFeeStatus.reversed)
         );
 
-        long totalInspections = inspectionRepository.count();
+        long totalInspections = inspectionRepository.countByInspectorIsNotNull();
         long passedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedTrue();
         long failedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedFalse();
 

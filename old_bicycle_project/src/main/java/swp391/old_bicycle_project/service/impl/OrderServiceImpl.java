@@ -180,8 +180,9 @@ public class OrderServiceImpl implements OrderService {
         orderTransitionSupport.publishOrderNotification(
                 order.getBuyer().getId(),
                 "Yêu cầu đặt cọc đã được chấp nhận",
-                "Người bán đã chấp nhận đơn hàng và bạn có thể thanh toán tiền ứng trước.",
-                "{\"orderId\":\"" + order.getId() + "\"}");
+                "Người bán đã chấp nhận đơn hàng và bạn có thể thanh toán khoản ứng trước qua SePay.",
+                "{\"orderId\":\"" + order.getId() + "\"}"
+        );
 
         return orderViewSupport.mapToDTO(order);
     }
@@ -210,9 +211,11 @@ public class OrderServiceImpl implements OrderService {
 
         orderTransitionSupport.publishOrderNotification(
                 order.getBuyer().getId(),
-                "Người bán đã báo giao xe",
-                "Hãy xác nhận bạn đã nhận xe để hệ thống chuyển sang bước giải ngân cho người bán.",
-                "{\"orderId\":\"" + order.getId() + "\"}");
+                "Người bán đã xác nhận gửi hàng",
+                "Người bán đã tải bằng chứng gửi hàng. Bạn có 5 ngày để kiểm tra xe và xác nhận hoặc khiếu nại trước khi hệ thống tự hoàn tất đơn.",
+                "{\"orderId\":\"" + order.getId() + "\",\"buyerConfirmationDeadline\":\"" + order.getBuyerConfirmationDeadline()
+                        + "\"}"
+        );
 
         return orderViewSupport.mapToDTO(
                 order,
@@ -225,8 +228,7 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderTransitionSupport.getOrder(orderId);
         orderTransitionSupport.validateBuyerOrAdmin(order, currentUser);
 
-        if (order.getStatus() != OrderStatus.awaiting_buyer_confirmation
-                || order.getFundingStatus() != OrderFundingStatus.held) {
+        if (order.getStatus() != OrderStatus.awaiting_buyer_confirmation) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
@@ -283,5 +285,70 @@ public class OrderServiceImpl implements OrderService {
         Order savedOrder = orderRepository.save(order);
         orderTransitionSupport.publishCancellationNotifications(savedOrder, currentUser);
         return orderViewSupport.mapToDTO(savedOrder);
+    }
+
+    @Override
+    @Transactional
+    public int autoCompleteOverdueBuyerConfirmations() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Order> overdueOrders = orderRepository.findByStatusAndFundingStatusAndBuyerConfirmationDeadlineBefore(
+                OrderStatus.awaiting_buyer_confirmation,
+                OrderFundingStatus.held,
+                now);
+
+        overdueOrders.forEach(order -> finalizeOrderAfterBuyerConfirmation(order, null, null, Collections.emptyList(), true));
+        return overdueOrders.size();
+    }
+
+    private OrderResponseDTO finalizeOrderAfterBuyerConfirmation(
+            Order order,
+            User currentUser,
+            String note,
+            List<MultipartFile> files,
+            boolean autoCompleted) {
+        order.setStatus(OrderStatus.completed);
+        order.setFundingStatus(OrderFundingStatus.seller_payout_pending);
+        order.setBuyerConfirmationDeadline(null);
+        order.getProduct().setStatus(ProductStatus.sold);
+        productRepository.save(order.getProduct());
+        order = orderRepository.save(order);
+
+        Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> evidenceByType = new EnumMap<>(OrderEvidenceType.class);
+        evidenceByType.putAll(orderEvidenceService.getEvidenceByOrderId(order.getId()));
+
+        if (!autoCompleted && currentUser != null) {
+            OrderEvidenceSubmissionResponseDTO buyerEvidence = orderEvidenceService.createBuyerReceiptEvidence(order,
+                    currentUser, note, files);
+            if (buyerEvidence != null) {
+                evidenceByType.put(OrderEvidenceType.buyer_receipt, buyerEvidence);
+            }
+        }
+
+        Payout payout = payoutService.ensureSellerReleasePayout(order);
+
+        if (autoCompleted) {
+            orderTransitionSupport.publishOrderNotification(
+                    order.getBuyer().getId(),
+                    "Đơn hàng đã tự hoàn tất sau 5 ngày",
+                    "Bạn không gửi khiếu nại trong vòng 5 ngày kể từ lúc người bán xác nhận gửi hàng, nên hệ thống đã tự hoàn tất đơn.",
+                    "{\"orderId\":\"" + order.getId() + "\",\"payoutId\":\"" + payout.getId() + "\"}");
+            orderTransitionSupport.publishOrderNotification(
+                    order.getSeller().getId(),
+                    "Đơn hàng đã tự hoàn tất",
+                    payout.getStatus() == PayoutStatus.profile_required
+                            ? "Đơn đã tự hoàn tất sau 5 ngày. Hãy cập nhật payout profile để nhận tiền bán xe sau khi trừ phí sàn."
+                            : "Đơn đã tự hoàn tất sau 5 ngày. Tiền bán xe sau khi trừ phí sàn đã được đưa vào hàng chờ admin chuyển khoản.",
+                    "{\"orderId\":\"" + order.getId() + "\",\"payoutId\":\"" + payout.getId() + "\"}");
+        } else {
+            orderTransitionSupport.publishOrderNotification(
+                    order.getSeller().getId(),
+                    "Người mua đã xác nhận nhận xe",
+                    payout.getStatus() == PayoutStatus.profile_required
+                            ? "Giao dịch đã hoàn tất. Hãy cập nhật payout profile để nhận tiền bán xe sau khi trừ phí sàn."
+                            : "Giao dịch đã hoàn tất. Tiền bán xe sau khi trừ phí sàn đang chờ admin chuyển khoản cho bạn.",
+                    "{\"orderId\":\"" + order.getId() + "\",\"payoutId\":\"" + payout.getId() + "\"}");
+        }
+
+        return orderViewSupport.mapToDTO(order, evidenceByType);
     }
 }

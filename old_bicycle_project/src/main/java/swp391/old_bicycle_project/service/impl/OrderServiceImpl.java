@@ -84,6 +84,14 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.RECORD_ALREADY_EXISTS);
         }
 
+        if (orderRepository.existsByBuyerIdAndProductIdAndStatusIn(
+                currentUser.getId(),
+                product.getId(),
+                List.of(OrderStatus.pending, OrderStatus.deposited, OrderStatus.awaiting_buyer_confirmation)
+        )) {
+            throw new AppException(ErrorCode.ORDER_ALREADY_EXISTS);
+        }
+
         PaymentOption paymentOption = requestDTO.getPaymentOption() != null
                 ? requestDTO.getPaymentOption()
                 : PaymentOption.partial;

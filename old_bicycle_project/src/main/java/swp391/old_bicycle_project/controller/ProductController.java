@@ -105,9 +105,12 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ProductResponse> getProduct(@PathVariable UUID id) {
+    public ApiResponse<ProductResponse> getProduct(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser
+    ) {
         return ApiResponse.<ProductResponse>builder()
-                .result(productService.getById(id))
+                .result(productService.getById(id, currentUser))
                 .build();
     }
 

@@ -87,7 +87,7 @@ public class ProductService {
         return mapProductPage(productRepository.findAll(spec, pageable));
     }
 
-    public ProductResponse getById(UUID id) {
+    public ProductResponse getById(UUID id, User currentUser) {
         Product product = findActiveProductById(id);
         Inspection inspection = inspectionRepository.findByProductId(product.getId()).orElse(null);
         if (!PUBLIC_VISIBLE_STATUSES.contains(product.getStatus()) || !isInspectionCurrentlyValid(product, inspection)) {
@@ -119,11 +119,18 @@ public class ProductService {
                 .build()
                 : null;
 
+        boolean hasPendingOrder = currentUser != null && orderRepository.existsByBuyerIdAndProductIdAndStatusIn(
+                currentUser.getId(),
+                product.getId(),
+                OPEN_ORDER_STATUSES
+        );
+
         return buildProductResponse(
                 product,
                 inspection,
                 hasExclusiveTransactionLock(product.getId()),
                 hasSellerActionLock(product.getId()),
+                hasPendingOrder,
                 imageInfos,
                 sellerInfo
         );
@@ -368,6 +375,7 @@ public class ProductService {
                 inspection,
                 hasExclusiveTransactionLock(product.getId()),
                 hasSellerActionLock(product.getId()),
+                false,
                 imageInfos,
                 sellerInfo
         );
@@ -430,6 +438,7 @@ public class ProductService {
                     inspectionsByProductId.get(product.getId()),
                     lockedProductIds.contains(product.getId()),
                     sellerActionLockedProductIds.contains(product.getId()),
+                    false,
                     imageInfos,
                     sellerInfo
             );
@@ -441,6 +450,7 @@ public class ProductService {
             Inspection inspection,
             boolean lockedForTransaction,
             boolean sellerActionLocked,
+            boolean currentUserHasPendingOrder,
             List<ProductResponse.ImageInfo> imageInfos,
             ProductResponse.SellerInfo sellerInfo
     ) {
@@ -482,6 +492,7 @@ public class ProductService {
                 .isVerified(verified)
                 .lockedForTransaction(lockedForTransaction)
                 .sellerActionLocked(sellerActionLocked)
+                .currentUserHasPendingOrder(currentUserHasPendingOrder)
                 .inspection(inspectionInfo)
                 .build();
     }

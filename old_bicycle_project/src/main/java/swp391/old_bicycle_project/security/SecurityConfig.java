@@ -102,6 +102,9 @@ public class SecurityConfig {
                                                 // ===== WebSocket =====
                                                 .requestMatchers("/ws/**").permitAll()
 
+                                                // ===== Notifications =====
+                                                .requestMatchers("/api/notifications/**").authenticated()
+
                                                 // ===== Admin only =====
                                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 

@@ -36,6 +36,7 @@ public class ProductResponse {
     private boolean isVerified;
     private boolean lockedForTransaction;
     private boolean sellerActionLocked;
+    private boolean currentUserHasPendingOrder;
     private InspectionInfo inspection;
 
     public ProductResponse() {}
@@ -94,6 +95,8 @@ public class ProductResponse {
     public void setLockedForTransaction(boolean lockedForTransaction) { this.lockedForTransaction = lockedForTransaction; }
     public boolean isSellerActionLocked() { return sellerActionLocked; }
     public void setSellerActionLocked(boolean sellerActionLocked) { this.sellerActionLocked = sellerActionLocked; }
+    public boolean isCurrentUserHasPendingOrder() { return currentUserHasPendingOrder; }
+    public void setCurrentUserHasPendingOrder(boolean currentUserHasPendingOrder) { this.currentUserHasPendingOrder = currentUserHasPendingOrder; }
     public InspectionInfo getInspection() { return inspection; }
     public void setInspection(InspectionInfo inspection) { this.inspection = inspection; }
 
@@ -128,6 +131,7 @@ public class ProductResponse {
         public ProductResponseBuilder isVerified(boolean isVerified) { pr.isVerified = isVerified; return this; }
         public ProductResponseBuilder lockedForTransaction(boolean locked) { pr.lockedForTransaction = locked; return this; }
         public ProductResponseBuilder sellerActionLocked(boolean locked) { pr.sellerActionLocked = locked; return this; }
+        public ProductResponseBuilder currentUserHasPendingOrder(boolean hasOrder) { pr.currentUserHasPendingOrder = hasOrder; return this; }
         public ProductResponseBuilder inspection(InspectionInfo inspection) { pr.inspection = inspection; return this; }
         public ProductResponse build() { return pr; }
     }

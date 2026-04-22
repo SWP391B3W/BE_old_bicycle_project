@@ -28,6 +28,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("statuses") Collection<OrderStatus> statuses
     );
 
+    List<Order> findByStatusAndFundingStatusAndBuyerConfirmationDeadlineBefore(
+            OrderStatus status,
+            OrderFundingStatus fundingStatus,
+            LocalDateTime deadline
+    );
+
     @Query(value = """
             select exists(
                 select 1

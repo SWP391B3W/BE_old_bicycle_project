@@ -53,6 +53,8 @@ public class SecurityConfig {
                                                 "/api/auth/reset-password",
                                                 "/api/auth/verify-email",
                                                 "/api/payments/sepay/webhook",
+                                                // Shipping public (GHN)
+                                                "/api/public/shipping/**",
                                                 // Swagger UI
                                                 "/swagger-ui/**",
                                                 "/swagger-ui.html",

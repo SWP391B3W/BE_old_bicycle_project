@@ -41,6 +41,8 @@ public interface InspectionRepository extends JpaRepository<Inspection, UUID>, J
 
     long countByInspectorIsNotNullAndPassedTrue();
 
+    long countByInspectorIsNotNullAndPassedFalse();
+
     long countByInspectorIdAndUpdatedAtAfter(UUID inspectorId, LocalDateTime updatedAt);
 
     long countByInspectorIsNotNullAndUpdatedAtAfter(LocalDateTime updatedAt);

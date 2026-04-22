@@ -1,6 +1,7 @@
 package swp391.old_bicycle_project.dto.product;
 
 import swp391.old_bicycle_project.entity.enums.ConditionType;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -19,25 +20,34 @@ public class ProductCreateRequest {
 
     @NotNull(message = "Giá không được để trống")
     @Positive(message = "Giá phải lớn hơn 0")
+    @JsonAlias("price_amount")
     private BigDecimal price;
 
+    @JsonAlias("original_price")
     private BigDecimal originalPrice;
 
     @NotNull(message = "Vui lòng chọn loại phanh")
+    @JsonAlias("brake_type_id")
     private UUID brakeTypeId;
 
     @NotNull(message = "Vui lòng chọn chất liệu khung")
+    @JsonAlias("frame_material_id")
     private UUID frameMaterialId;
 
+    @JsonAlias("brand_id")
     private UUID brandId;
+    @JsonAlias("category_id")
     private UUID categoryId;
 
     @NotBlank(message = "Vui lòng nhập kích thước khung")
+    @JsonAlias("frame_size")
     private String frameSize;
 
     @NotBlank(message = "Vui lòng nhập kích thước bánh")
+    @JsonAlias("wheel_size")
     private String wheelSize;
 
+    @JsonAlias("groupset_id")
     private UUID groupsetId;
 
     private String groupset;

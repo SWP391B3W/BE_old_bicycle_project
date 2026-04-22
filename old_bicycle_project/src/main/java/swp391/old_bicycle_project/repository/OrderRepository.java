@@ -62,6 +62,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     long countBySellerId(UUID sellerId);
 
+    long countByStatusNot(OrderStatus status);
+
     List<Order> findAllByOrderByCreatedAtDesc();
 
     java.util.Optional<Order> findByIdAndBuyerId(UUID orderId, UUID buyerId);
@@ -70,6 +72,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             OrderStatus status,
             OrderFundingStatus fundingStatus,
             LocalDateTime paymentDeadline
+    );
+
+    List<Order> findByStatusAndFundingStatusAndBuyerConfirmationDeadlineBefore(
+            OrderStatus status,
+            OrderFundingStatus fundingStatus,
+            LocalDateTime buyerConfirmationDeadline
     );
 
     @Query("SELECT SUM(o.totalAmount) FROM Order o WHERE o.status = :status")

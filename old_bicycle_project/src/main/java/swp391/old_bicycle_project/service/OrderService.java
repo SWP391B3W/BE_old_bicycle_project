@@ -23,4 +23,6 @@ public interface OrderService {
     OrderResponseDTO confirmReceived(UUID orderId, User currentUser, String note, List<MultipartFile> files);
 
     OrderResponseDTO cancelOrder(UUID orderId, User currentUser);
+
+    int autoCompleteOverdueBuyerConfirmations();
 }

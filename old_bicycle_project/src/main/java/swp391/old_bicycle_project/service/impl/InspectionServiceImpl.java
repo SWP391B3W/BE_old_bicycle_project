@@ -377,9 +377,9 @@ public class InspectionServiceImpl implements InspectionService {
         eventPublisher.publishEvent(new NotificationEvent(
                 this,
                 product.getSeller().getId(),
-                "Tin đăng đã được chuyển sang kiểm định",
-                "Admin đã duyệt sơ bộ tin \"" + product.getTitle()
-                        + "\" và chuyển sang hàng chờ inspector. Tin chỉ được hiển thị công khai sau khi kiểm định đạt.",
+                "Tin đăng đã vào hàng chờ kiểm định",
+                "Tin \"" + product.getTitle()
+                        + "\" đã ở trong hàng chờ inspector. Tin chỉ được hiển thị công khai sau khi kiểm định đạt.",
                 NotificationType.inspection,
                 metadata
         ));
@@ -405,7 +405,7 @@ public class InspectionServiceImpl implements InspectionService {
                 ? "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
                 + "\". Tin đăng hiện đã đủ điều kiện hiển thị công khai."
                 : "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
-                + "\" nhưng kết quả không đạt. Hãy chỉnh sửa tin đăng rồi gửi lại để admin chuyển kiểm định lại.";
+                + "\" nhưng kết quả không đạt. Hãy chỉnh sửa tin đăng rồi gửi lại để vào hàng chờ kiểm định lại.";
         String metadata = "{\"productId\":\"" + product.getId()
                 + "\",\"inspectionId\":\"" + inspection.getId()
                 + "\",\"passed\":" + Boolean.TRUE.equals(inspection.getPassed())

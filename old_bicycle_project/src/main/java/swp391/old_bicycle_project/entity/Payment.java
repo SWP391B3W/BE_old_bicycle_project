@@ -120,7 +120,7 @@ public class Payment {
     public void setStatus(PaymentStatus status) { this.status = status; }
     public void setGatewayOrderCode(String code) { this.gatewayOrderCode = code; }
     public void setCheckoutUrl(String url) { this.checkoutUrl = url; }
-    public void setQrCodeUrl(String url) { this.qrCodeUrl = qrCodeUrl; }
+    public void setQrCodeUrl(String url) { this.qrCodeUrl = url; }
     public void setTransactionReference(String ref) { this.transactionReference = ref; }
     public void setGatewayResponse(String resp) { this.gatewayResponse = resp; }
     public void setPaymentDate(LocalDateTime date) { this.paymentDate = date; }

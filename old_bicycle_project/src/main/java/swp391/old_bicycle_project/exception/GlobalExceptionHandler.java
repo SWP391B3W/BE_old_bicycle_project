@@ -63,14 +63,14 @@ public class GlobalExceptionHandler {
             validationMessage = ErrorCode.INVALID_REQUEST_BODY.name();
         }
 
-        ErrorCode errorCode = ErrorCode.INVALID_KEY;
-        String responseMessage = validationMessage;
+        ErrorCode errorCode = ErrorCode.INVALID_REQUEST_BODY;
+        String responseMessage = validationMessage != null ? validationMessage : errorCode.getMessage();
 
         try {
             errorCode = ErrorCode.valueOf(validationMessage);
             responseMessage = errorCode.getMessage();
         } catch (IllegalArgumentException e) {
-            log.error("Validation message does not map to ErrorCode enum: {}", validationMessage);
+            log.debug("Validation message does not map to ErrorCode enum: {}", validationMessage);
         }
 
         ApiResponse<Object> apiResponse = new ApiResponse<>();
@@ -88,6 +88,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.builder()
                 .code(ErrorCode.INVALID_REQUEST_BODY.getCode())
                 .message(ErrorCode.INVALID_REQUEST_BODY.getMessage())
+                .build());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<ApiResponse<?>> handlingIllegalArgumentException(IllegalArgumentException exception) {
+        String message = exception.getMessage();
+
+        return ResponseEntity.badRequest().body(ApiResponse.builder()
+                .code(ErrorCode.INVALID_REQUEST_BODY.getCode())
+                .message(message == null || message.isBlank()
+                        ? ErrorCode.INVALID_REQUEST_BODY.getMessage()
+                        : message)
                 .build());
     }
 }

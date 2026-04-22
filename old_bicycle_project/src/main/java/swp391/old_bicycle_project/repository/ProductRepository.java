@@ -51,4 +51,6 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     long countBySellerId(@Param("sellerId") UUID sellerId);
 
     long countByStatus(ProductStatus status);
+
+    long countByDeletedAtIsNull();
 }

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import swp391.old_bicycle_project.dto.response.ApiResponse;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class NotificationController {
 
     private final NotificationService notificationService;

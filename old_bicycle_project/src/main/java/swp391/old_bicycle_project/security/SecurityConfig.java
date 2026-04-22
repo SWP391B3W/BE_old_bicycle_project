@@ -141,6 +141,9 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/payout-profiles/**")
                                                 .authenticated()
 
+                                                .requestMatchers("/api/notifications/**")
+                                                .authenticated()
+
                                                 // ===== Authenticated (any role) =====
                                                 .anyRequest().authenticated())
                                 .oauth2Login(oauth2 -> oauth2

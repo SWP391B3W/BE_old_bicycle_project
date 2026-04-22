@@ -14,6 +14,19 @@ import java.util.List;
 public final class MultipartFileValidationUtils {
 
     private static final byte[] PDF_SIGNATURE = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PNG_SIGNATURE = new byte[]{
+            (byte) 0x89, 0x50, 0x4E, 0x47,
+            0x0D, 0x0A, 0x1A, 0x0A
+    };
+    private static final byte[] JPEG_SIGNATURE = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] GIF87A_SIGNATURE = "GIF87a".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] GIF89A_SIGNATURE = "GIF89a".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] RIFF_SIGNATURE = "RIFF".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] WEBP_SIGNATURE = "WEBP".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] BMP_SIGNATURE = "BM".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] TIFF_LE_SIGNATURE = new byte[]{0x49, 0x49, 0x2A, 0x00};
+    private static final byte[] TIFF_BE_SIGNATURE = new byte[]{0x4D, 0x4D, 0x00, 0x2A};
+    private static final byte[] FTYP_SIGNATURE = "ftyp".getBytes(StandardCharsets.US_ASCII);
 
     private MultipartFileValidationUtils() {
     }
@@ -76,11 +89,74 @@ public final class MultipartFileValidationUtils {
             return false;
         }
 
+        if (isKnownImageBySignature(file)) {
+            return true;
+        }
+
         try (InputStream inputStream = file.getInputStream()) {
             return ImageIO.read(inputStream) != null;
         } catch (IOException exception) {
             return false;
         }
+    }
+
+    private static boolean isKnownImageBySignature(MultipartFile file) {
+        try (InputStream inputStream = file.getInputStream()) {
+            byte[] header = inputStream.readNBytes(32);
+            if (header.length < 2) {
+                return false;
+            }
+
+            if (startsWith(header, PNG_SIGNATURE)
+                    || startsWith(header, JPEG_SIGNATURE)
+                    || startsWith(header, GIF87A_SIGNATURE)
+                    || startsWith(header, GIF89A_SIGNATURE)
+                    || startsWith(header, BMP_SIGNATURE)
+                    || startsWith(header, TIFF_LE_SIGNATURE)
+                    || startsWith(header, TIFF_BE_SIGNATURE)) {
+                return true;
+            }
+
+            // WEBP: RIFF....WEBP
+            if (startsWith(header, RIFF_SIGNATURE)
+                    && header.length >= 12
+                    && matchesAt(header, 8, WEBP_SIGNATURE)) {
+                return true;
+            }
+
+            // HEIC/HEIF: ....ftypheic|heix|hevc|hevx|mif1|msf1
+            if (header.length >= 12 && matchesAt(header, 4, FTYP_SIGNATURE)) {
+                String brand = new String(header, 8, 4, StandardCharsets.US_ASCII).toLowerCase();
+                return brand.equals("heic")
+                        || brand.equals("heix")
+                        || brand.equals("hevc")
+                        || brand.equals("hevx")
+                        || brand.equals("mif1")
+                        || brand.equals("msf1");
+            }
+
+            return false;
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
+    private static boolean startsWith(byte[] source, byte[] prefix) {
+        return matchesAt(source, 0, prefix);
+    }
+
+    private static boolean matchesAt(byte[] source, int offset, byte[] pattern) {
+        if (source.length < offset + pattern.length) {
+            return false;
+        }
+
+        for (int index = 0; index < pattern.length; index++) {
+            if (source[offset + index] != pattern[index]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static boolean isPdfFile(MultipartFile file) {

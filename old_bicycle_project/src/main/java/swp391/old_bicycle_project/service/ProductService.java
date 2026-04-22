@@ -150,9 +150,14 @@ public class ProductService {
 
     @Transactional
     public ProductResponse create(ProductCreateRequest request, List<MultipartFile> images, User seller) {
+        return create(request, images, List.of(), seller);
+    }
+
+    @Transactional
+    public ProductResponse create(ProductCreateRequest request, List<MultipartFile> images, List<String> imageUrls, User seller) {
         List<MultipartFile> normalizedImages = MultipartFileValidationUtils.normalizeFiles(images);
         validateRequiredTechnicalFields(request.getFrameSize(), request.getWheelSize());
-        validateMinimumImages(normalizedImages);
+        validateMinimumImages(normalizedImages, imageUrls);
 
         BrakeType brakeType = brakeTypeRepository.findById(request.getBrakeTypeId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND));
@@ -184,20 +189,26 @@ public class ProductService {
                 .condition(request.getCondition() != null ? request.getCondition() : swp391.old_bicycle_project.entity.enums.ConditionType.used)
                 .province(request.getProvince())
                 .district(request.getDistrict())
-                .status(ProductStatus.pending)
+                .status(ProductStatus.pending_inspection)
                 .build();
 
         productRepository.save(product);
         product.setExpiresAt(product.getCreatedAt().plusDays(30));
-        product.setImages(uploadImages(product, normalizedImages));
+        product.setImages(saveProductImages(product, normalizedImages, imageUrls));
+        createPendingInspection(product);
         productRepository.save(product);
-        publishAdminModerationNotification(product, "cần admin kiểm duyệt tin đăng mới");
+        publishInspectionQueuedNotification(product);
 
         return toResponse(product);
     }
 
     @Transactional
     public ProductResponse update(UUID id, ProductUpdateRequest request, List<MultipartFile> newImages, User currentUser) {
+        return update(id, request, newImages, List.of(), currentUser);
+    }
+
+    @Transactional
+    public ProductResponse update(UUID id, ProductUpdateRequest request, List<MultipartFile> newImages, List<String> newImageUrls, User currentUser) {
         Product product = findActiveProductById(id);
         validateSellerCanModify(product, currentUser);
         List<MultipartFile> normalizedNewImages = MultipartFileValidationUtils.normalizeFiles(newImages);
@@ -234,10 +245,10 @@ public class ProductService {
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND)));
         }
 
-        if (newImages != null && !newImages.isEmpty()) {
-            validateMinimumImages(normalizedNewImages);
+        if (!normalizedNewImages.isEmpty() || (newImageUrls != null && !newImageUrls.isEmpty())) {
+            validateMinimumImages(normalizedNewImages, newImageUrls);
             removeStoredImages(product);
-            List<ProductImage> uploadedImages = uploadImages(product, normalizedNewImages);
+            List<ProductImage> uploadedImages = saveProductImages(product, normalizedNewImages, newImageUrls);
             product.getImages().clear();
             product.getImages().addAll(uploadedImages);
         }
@@ -553,13 +564,23 @@ public class ProductService {
         }
     }
 
-    private void validateMinimumImages(List<MultipartFile> images) {
-        MultipartFileValidationUtils.validateRequiredImages(
-                images,
-                3,
-                ErrorCode.PRODUCT_MINIMUM_IMAGES_REQUIRED,
-                ErrorCode.PRODUCT_IMAGE_INVALID
-        );
+    private void validateMinimumImages(List<MultipartFile> images, List<String> imageUrls) {
+        List<MultipartFile> normalizedImages = images != null ? images : List.of();
+        List<String> normalizedImageUrls = normalizeImageUrls(imageUrls);
+
+        if (!normalizedImages.isEmpty()) {
+            MultipartFileValidationUtils.validateRequiredImages(
+                    normalizedImages,
+                    3,
+                    ErrorCode.PRODUCT_MINIMUM_IMAGES_REQUIRED,
+                    ErrorCode.PRODUCT_IMAGE_INVALID
+            );
+            return;
+        }
+
+        if (normalizedImageUrls.size() < 3) {
+            throw new AppException(ErrorCode.PRODUCT_MINIMUM_IMAGES_REQUIRED);
+        }
     }
 
     private List<ProductImage> uploadImages(Product product, List<MultipartFile> images) {
@@ -580,6 +601,37 @@ public class ProductService {
         }
         productImageRepository.saveAll(productImages);
         return productImages;
+    }
+
+    private List<ProductImage> saveProductImages(Product product, List<MultipartFile> images, List<String> imageUrls) {
+        List<MultipartFile> normalizedImages = images != null ? images : List.of();
+        if (!normalizedImages.isEmpty()) {
+            return uploadImages(product, normalizedImages);
+        }
+
+        List<String> normalizedImageUrls = normalizeImageUrls(imageUrls);
+        List<ProductImage> productImages = new ArrayList<>();
+        for (int displayOrder = 0; displayOrder < normalizedImageUrls.size(); displayOrder++) {
+            productImages.add(ProductImage.builder()
+                    .product(product)
+                    .url(normalizedImageUrls.get(displayOrder))
+                    .isPrimary(displayOrder == 0)
+                    .displayOrder(displayOrder)
+                    .build());
+        }
+        productImageRepository.saveAll(productImages);
+        return productImages;
+    }
+
+    private List<String> normalizeImageUrls(List<String> imageUrls) {
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            return List.of();
+        }
+
+        return imageUrls.stream()
+                .filter(url -> url != null && !url.isBlank())
+                .map(String::trim)
+                .toList();
     }
 
     private void validatePriceRange(ProductFilterRequest filter) {
@@ -612,10 +664,41 @@ public class ProductService {
 
     private void invalidateInspection(Product product) {
         inspectionRepository.findByProductId(product.getId()).ifPresent(inspection -> {
+            inspection.setInspector(null);
+            inspection.setOverallScore(null);
+            inspection.setFrameScore(null);
+            inspection.setForkScore(null);
+            inspection.setBrakesScore(null);
+            inspection.setDrivetrainScore(null);
+            inspection.setWheelsScore(null);
+            inspection.setWearPercentage(null);
+            inspection.setExpertNotes(null);
             inspection.setPassed(false);
+            inspection.setReportFileUrl(null);
             inspection.setValidUntil(LocalDateTime.now());
             inspectionRepository.save(inspection);
         });
+    }
+
+    private void createPendingInspection(Product product) {
+        Inspection inspection = inspectionRepository.findByProductId(product.getId())
+                .orElseGet(() -> Inspection.builder()
+                        .product(product)
+                        .build());
+
+        inspection.setInspector(null);
+        inspection.setOverallScore(null);
+        inspection.setFrameScore(null);
+        inspection.setForkScore(null);
+        inspection.setBrakesScore(null);
+        inspection.setDrivetrainScore(null);
+        inspection.setWheelsScore(null);
+        inspection.setWearPercentage(null);
+        inspection.setExpertNotes(null);
+        inspection.setPassed(false);
+        inspection.setReportFileUrl(null);
+        inspection.setValidUntil(null);
+        inspectionRepository.save(inspection);
     }
 
     private boolean isInspectionCurrentlyValid(Product product, Inspection inspection) {
@@ -650,6 +733,32 @@ public class ProductService {
                         "Có tin đăng chờ kiểm duyệt",
                         "Tin \"" + productTitle + "\" " + actionDescription + ". Vui lòng kiểm tra và quyết định bước tiếp theo.",
                         NotificationType.system,
+                        metadata
+                )));
+    }
+
+    private void publishInspectionQueuedNotification(Product product) {
+        String metadata = "{\"productId\":\"" + product.getId() + "\"}";
+
+        eventPublisher.publishEvent(new NotificationEvent(
+                this,
+                product.getSeller().getId(),
+                "Tin đăng đã vào hàng chờ kiểm định",
+                "Tin \"" + product.getTitle()
+                        + "\" đã được đưa thẳng vào hàng chờ inspector. Tin chỉ hiển thị công khai sau khi kiểm định đạt.",
+                NotificationType.inspection,
+                metadata
+        ));
+
+        userRepository.findByRole(AppRole.inspector).stream()
+                .map(User::getId)
+                .distinct()
+                .forEach(inspectorId -> eventPublisher.publishEvent(new NotificationEvent(
+                        this,
+                        inspectorId,
+                        "Có tin đăng mới cần kiểm định",
+                        "Tin \"" + product.getTitle() + "\" đang chờ inspector xử lý kiểm định.",
+                        NotificationType.inspection,
                         metadata
                 )));
     }

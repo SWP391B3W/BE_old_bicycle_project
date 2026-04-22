@@ -3,7 +3,7 @@ package swp391.old_bicycle_project.service.impl;
 import swp391.old_bicycle_project.dto.response.DashboardStatsDTO;
 import swp391.old_bicycle_project.entity.enums.OrderStatus;
 import swp391.old_bicycle_project.entity.enums.PlatformFeeStatus;
-import swp391.old_bicycle_project.entity.enums.ProductStatus;
+import swp391.old_bicycle_project.entity.enums.UserStatus;
 import swp391.old_bicycle_project.repository.InspectionRepository;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
@@ -29,9 +29,9 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     public DashboardStatsDTO getDashboardStats() {
 
-        long totalUsers = userRepository.count();
-        long totalProducts = productRepository.count();
-        long totalOrders = orderRepository.count();
+        long totalUsers = userRepository.countByStatus(UserStatus.active);
+        long totalProducts = productRepository.countByDeletedAtIsNull();
+        long totalOrders = orderRepository.countByStatusNot(OrderStatus.cancelled);
 
         BigDecimal totalGmv = defaultZero(orderRepository.sumTotalAmountByStatus(OrderStatus.completed));
         BigDecimal pendingPlatformFee = defaultZero(
@@ -44,9 +44,9 @@ public class DashboardServiceImpl implements DashboardService {
                 orderRepository.sumPlatformFeeTotalByPlatformFeeStatus(PlatformFeeStatus.reversed)
         );
 
-        long totalInspections = inspectionRepository.count();
-        long passedInspections = productRepository.countByStatus(ProductStatus.inspected_passed);
-        long failedInspections = productRepository.countByStatus(ProductStatus.inspected_failed);
+        long totalInspections = inspectionRepository.countByInspectorIsNotNull();
+        long passedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedTrue();
+        long failedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedFalse();
 
         Map<String, BigDecimal> monthlyGmv = toBigDecimalMap(orderRepository.getMonthlyCompletedGmv());
         Map<String, BigDecimal> monthlyRecognizedPlatformRevenue =

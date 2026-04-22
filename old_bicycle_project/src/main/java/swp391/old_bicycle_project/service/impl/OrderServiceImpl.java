@@ -1,5 +1,9 @@
 package swp391.old_bicycle_project.service.impl;
 
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import swp391.old_bicycle_project.dto.request.OrderCreateRequestDTO;
 import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDTO;
 import swp391.old_bicycle_project.dto.response.OrderResponseDTO;
@@ -26,14 +30,11 @@ import swp391.old_bicycle_project.service.OrderEvidenceService;
 import swp391.old_bicycle_project.service.OrderService;
 import swp391.old_bicycle_project.service.PayoutService;
 import swp391.old_bicycle_project.service.PlatformFeeService;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,15 +57,14 @@ public class OrderServiceImpl implements OrderService {
             ApplicationEventPublisher eventPublisher,
             PayoutService payoutService,
             OrderEvidenceService orderEvidenceService,
-            PlatformFeeService platformFeeService
-    ) {
+            PlatformFeeService platformFeeService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.payoutService = payoutService;
         this.orderEvidenceService = orderEvidenceService;
         this.platformFeeService = platformFeeService;
         this.orderTransitionSupport = new OrderTransitionSupport(orderRepository, productRepository, eventPublisher);
-        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService);
+        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService, platformFeeService);
     }
 
     @Override
@@ -87,8 +87,7 @@ public class OrderServiceImpl implements OrderService {
         if (orderRepository.existsByBuyerIdAndProductIdAndStatusIn(
                 currentUser.getId(),
                 product.getId(),
-                List.of(OrderStatus.pending, OrderStatus.deposited, OrderStatus.awaiting_buyer_confirmation)
-        )) {
+                List.of(OrderStatus.pending, OrderStatus.deposited, OrderStatus.awaiting_buyer_confirmation))) {
             throw new AppException(ErrorCode.ORDER_ALREADY_EXISTS);
         }
 
@@ -98,16 +97,13 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal requiredUpfrontAmount = orderTransitionSupport.resolveRequiredUpfrontAmount(
                 requestDTO,
                 product.getPrice(),
-                paymentOption
-        );
+                paymentOption);
         PlatformFeeService.PlatformFeeQuote platformFeeQuote = platformFeeService.calculate(
                 product.getPrice(),
                 requiredUpfrontAmount,
-                requestDTO.getPaymentMethod()
-        );
+                requestDTO.getPaymentMethod());
 
         if (paymentOption == PaymentOption.partial
-                && requestDTO.getPaymentMethod() != PaymentMethod.cash
                 && platformFeeQuote.sellerFeeAmount().compareTo(requiredUpfrontAmount) > 0) {
             throw new AppException(ErrorCode.UPFRONT_AMOUNT_TOO_LOW);
         }
@@ -132,7 +128,7 @@ public class OrderServiceImpl implements OrderService {
                 .sellerNetPayoutAmount(platformFeeQuote.sellerNetPayoutAmount())
                 .platformFeeStatus(platformFeeQuote.platformFeeStatus())
                 .paymentOption(paymentOption)
-                .paymentMethod(requestDTO.getPaymentMethod())
+                .paymentMethod(paymentMethod)
                 .fundingStatus(OrderFundingStatus.unpaid)
                 .status(OrderStatus.pending)
                 .build());
@@ -141,8 +137,7 @@ public class OrderServiceImpl implements OrderService {
                 order.getSeller().getId(),
                 "Có yêu cầu mua mới",
                 currentUser.getFullName() + " vừa tạo yêu cầu mua cho sản phẩm " + product.getTitle() + ".",
-                "{\"orderId\":\"" + order.getId() + "\",\"productId\":\"" + product.getId() + "\"}"
-        );
+                "{\"orderId\":\"" + order.getId() + "\",\"productId\":\"" + product.getId() + "\"}");
 
         return orderViewSupport.mapToDTO(order);
     }
@@ -186,8 +181,7 @@ public class OrderServiceImpl implements OrderService {
                 order.getBuyer().getId(),
                 "Yêu cầu đặt cọc đã được chấp nhận",
                 "Người bán đã chấp nhận đơn hàng và bạn có thể thanh toán tiền ứng trước.",
-                "{\"orderId\":\"" + order.getId() + "\"}"
-        );
+                "{\"orderId\":\"" + order.getId() + "\"}");
 
         return orderViewSupport.mapToDTO(order);
     }
@@ -195,31 +189,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponseDTO confirmDeposit(UUID orderId, User currentUser) {
-        Order order = orderTransitionSupport.getOrder(orderId);
-        orderTransitionSupport.validateSellerOrAdmin(order, currentUser);
-
-        if (order.getStatus() != OrderStatus.pending) {
-            throw new AppException(ErrorCode.INVALID_STATUS);
-        }
-
-        if (order.getPaymentMethod() != PaymentMethod.cash) {
-            throw new AppException(ErrorCode.PAYMENT_METHOD_NOT_SUPPORTED);
-        }
-        if (order.getFundingStatus() != OrderFundingStatus.awaiting_payment
-                || order.getAcceptedAt() == null
-                || order.getPaymentDeadline() == null) {
-            throw new AppException(ErrorCode.PAYMENT_NOT_READY);
-        }
-        if (order.getPaymentDeadline() != null && order.getPaymentDeadline().isBefore(LocalDateTime.now())) {
-            orderTransitionSupport.expirePendingPaymentOrder(order, LocalDateTime.now());
-            throw new AppException(ErrorCode.PAYMENT_EXPIRED);
-        }
-
-        order.setStatus(OrderStatus.deposited);
-        order.setPaidAmount(order.getRequiredUpfrontAmount());
-        order.setRemainingAmount(order.getTotalAmount().subtract(order.getRequiredUpfrontAmount()));
-        order.setFundingStatus(OrderFundingStatus.held);
-        return orderViewSupport.mapToDTO(orderRepository.save(order));
+        throw new AppException(ErrorCode.PAYMENT_METHOD_NOT_SUPPORTED);
     }
 
     @Override
@@ -233,21 +203,20 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(OrderStatus.awaiting_buyer_confirmation);
+        order.setBuyerConfirmationDeadline(LocalDateTime.now().plusDays(5));
         order = orderRepository.save(order);
-        OrderEvidenceSubmissionResponseDTO sellerEvidence =
-                orderEvidenceService.createSellerHandoverEvidence(order, currentUser, note, files);
+        OrderEvidenceSubmissionResponseDTO sellerEvidence = orderEvidenceService.createSellerHandoverEvidence(order,
+                currentUser, note, files);
 
         orderTransitionSupport.publishOrderNotification(
                 order.getBuyer().getId(),
                 "Người bán đã báo giao xe",
                 "Hãy xác nhận bạn đã nhận xe để hệ thống chuyển sang bước giải ngân cho người bán.",
-                "{\"orderId\":\"" + order.getId() + "\"}"
-        );
+                "{\"orderId\":\"" + order.getId() + "\"}");
 
         return orderViewSupport.mapToDTO(
                 order,
-                Map.of(OrderEvidenceType.seller_handover, sellerEvidence)
-        );
+                Map.of(OrderEvidenceType.seller_handover, sellerEvidence));
     }
 
     @Override
@@ -261,33 +230,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
-        order.setStatus(OrderStatus.completed);
-        order.setFundingStatus(OrderFundingStatus.seller_payout_pending);
-        order.getProduct().setStatus(ProductStatus.sold);
-        productRepository.save(order.getProduct());
-        order = orderRepository.save(order);
-
-        Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> evidenceByType =
-                new java.util.EnumMap<>(OrderEvidenceType.class);
-        evidenceByType.putAll(orderEvidenceService.getEvidenceByOrderId(order.getId()));
-
-        Payout payout = payoutService.ensureSellerReleasePayout(order);
-        OrderEvidenceSubmissionResponseDTO buyerEvidence =
-                orderEvidenceService.createBuyerReceiptEvidence(order, currentUser, note, files);
-        if (buyerEvidence != null) {
-            evidenceByType.put(OrderEvidenceType.buyer_receipt, buyerEvidence);
-        }
-
-        orderTransitionSupport.publishOrderNotification(
-                order.getSeller().getId(),
-                "Người mua đã xác nhận nhận xe",
-                payout.getStatus() == PayoutStatus.profile_required
-                        ? "Giao dịch đã hoàn tất. Hãy cập nhật payout profile để nhận khoản cọc."
-                        : "Giao dịch đã hoàn tất. Khoản cọc đang chờ admin chuyển khoản thủ công cho bạn.",
-                "{\"orderId\":\"" + order.getId() + "\",\"payoutId\":\"" + payout.getId() + "\"}"
-        );
-
-        return orderViewSupport.mapToDTO(order, evidenceByType);
+        return finalizeOrderAfterBuyerConfirmation(order, currentUser, note, files, false);
     }
 
     @Override
@@ -333,8 +276,7 @@ public class OrderServiceImpl implements OrderService {
             order.setCancelReason(OrderCancelReason.admin_cancelled);
         } else if (order.getSeller().getId().equals(currentUser.getId())) {
             order.setCancelReason(
-                    wasSellerReviewRequest ? OrderCancelReason.seller_rejected : OrderCancelReason.seller_cancelled
-            );
+                    wasSellerReviewRequest ? OrderCancelReason.seller_rejected : OrderCancelReason.seller_cancelled);
         } else {
             order.setCancelReason(OrderCancelReason.buyer_cancelled);
         }

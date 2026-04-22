@@ -102,6 +102,9 @@ public class SecurityConfig {
                                                 // ===== WebSocket =====
                                                 .requestMatchers("/ws/**").permitAll()
 
+                                                // ===== Notifications =====
+                                                .requestMatchers("/api/notifications/**").authenticated()
+
                                                 // ===== Admin only =====
                                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
@@ -136,6 +139,9 @@ public class SecurityConfig {
                                                 .hasAnyRole("BUYER", "SELLER", "ADMIN")
 
                                                 .requestMatchers("/api/payout-profiles/**")
+                                                .authenticated()
+
+                                                .requestMatchers("/api/notifications/**")
                                                 .authenticated()
 
                                                 // ===== Authenticated (any role) =====

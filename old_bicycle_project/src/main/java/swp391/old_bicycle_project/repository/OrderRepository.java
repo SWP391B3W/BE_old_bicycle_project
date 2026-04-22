@@ -20,6 +20,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     boolean existsByProductIdAndStatusIn(UUID productId, Collection<OrderStatus> statuses);
 
+    boolean existsByBuyerIdAndProductIdAndStatusIn(UUID buyerId, UUID productId, Collection<OrderStatus> statuses);
+
     @Query("select distinct o.product.id from Order o where o.product.id in :productIds and o.status in :statuses")
     List<UUID> findLockedProductIdsByProductIdsAndStatuses(
             @Param("productIds") Collection<UUID> productIds,

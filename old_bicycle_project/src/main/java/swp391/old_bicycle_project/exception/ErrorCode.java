@@ -60,7 +60,8 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST),
     INVALID_PRICE_RANGE(1049, "Khoảng giá không hợp lệ", HttpStatus.BAD_REQUEST),
     PRODUCT_IMAGE_INVALID(1050, "Chỉ chấp nhận file ảnh hợp lệ cho sản phẩm", HttpStatus.BAD_REQUEST),
-    INSPECTION_REPORT_INVALID(1051, "Chỉ chấp nhận file PDF hợp lệ cho báo cáo kiểm định", HttpStatus.BAD_REQUEST);
+    INSPECTION_REPORT_INVALID(1051, "Chỉ chấp nhận file PDF hợp lệ cho báo cáo kiểm định", HttpStatus.BAD_REQUEST),
+    ORDER_ALREADY_EXISTS(1052, "Bạn đã có một đơn mua cho sản phẩm này", HttpStatus.BAD_REQUEST);
 
     ErrorCode(int code, String message, HttpStatus statusCode) {
         this.code = code;

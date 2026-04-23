@@ -11,7 +11,12 @@ import java.math.RoundingMode;
 @Service
 public class PlatformFeeServiceImpl implements PlatformFeeService {
 
-    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.1000");
+    private final swp391.old_bicycle_project.repository.SystemSettingRepository systemSettingRepository;
+    private static final BigDecimal DEFAULT_PLATFORM_FEE_RATE = new BigDecimal("0.1000");
+
+    public PlatformFeeServiceImpl(swp391.old_bicycle_project.repository.SystemSettingRepository systemSettingRepository) {
+        this.systemSettingRepository = systemSettingRepository;
+    }
 
     @Override
     public PlatformFeeQuote calculate(BigDecimal totalAmount, BigDecimal protectedAmount, PaymentMethod paymentMethod) {
@@ -33,8 +38,18 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
                     PlatformFeeStatus.not_applicable);
         }
 
+        BigDecimal feeRate = systemSettingRepository.findByKey("platform_fee_rate")
+                .map(setting -> {
+                    try {
+                        return new BigDecimal(setting.getValue());
+                    } catch (Exception e) {
+                        return DEFAULT_PLATFORM_FEE_RATE;
+                    }
+                })
+                .orElse(DEFAULT_PLATFORM_FEE_RATE);
+
         BigDecimal platformFeeTotal = normalizedTotalAmount
-            .multiply(PLATFORM_FEE_RATE)
+            .multiply(feeRate)
             .setScale(0, RoundingMode.HALF_UP);
         BigDecimal buyerFeeAmount = BigDecimal.ZERO;
         BigDecimal sellerFeeAmount = platformFeeTotal;
@@ -44,7 +59,7 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
 
         return new PlatformFeeQuote(
                 normalizedTotalAmount,
-                PLATFORM_FEE_RATE,
+                feeRate,
                 platformFeeTotal,
                 buyerFeeAmount,
                 sellerFeeAmount,

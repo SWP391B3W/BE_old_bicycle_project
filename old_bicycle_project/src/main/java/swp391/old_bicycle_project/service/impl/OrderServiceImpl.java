@@ -23,6 +23,7 @@ import swp391.old_bicycle_project.entity.enums.PlatformFeeStatus;
 import swp391.old_bicycle_project.entity.enums.ProductStatus;
 import swp391.old_bicycle_project.exception.AppException;
 import swp391.old_bicycle_project.exception.ErrorCode;
+import swp391.old_bicycle_project.repository.InspectionRepository;
 import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
 import swp391.old_bicycle_project.repository.ReviewRepository;
@@ -57,14 +58,15 @@ public class OrderServiceImpl implements OrderService {
             ApplicationEventPublisher eventPublisher,
             PayoutService payoutService,
             OrderEvidenceService orderEvidenceService,
-            PlatformFeeService platformFeeService) {
+            PlatformFeeService platformFeeService,
+            InspectionRepository inspectionRepository) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.payoutService = payoutService;
         this.orderEvidenceService = orderEvidenceService;
         this.platformFeeService = platformFeeService;
         this.orderTransitionSupport = new OrderTransitionSupport(orderRepository, productRepository, eventPublisher);
-        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService, platformFeeService);
+        this.orderViewSupport = new OrderViewSupport(reviewRepository, orderEvidenceService, platformFeeService, inspectionRepository);
     }
 
     @Override

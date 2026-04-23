@@ -2,13 +2,16 @@ package swp391.old_bicycle_project.service.impl;
 
 import swp391.old_bicycle_project.dto.response.OrderEvidenceSubmissionResponseDTO;
 import swp391.old_bicycle_project.dto.response.OrderResponseDTO;
+import swp391.old_bicycle_project.entity.Inspection;
 import swp391.old_bicycle_project.entity.Order;
 import swp391.old_bicycle_project.entity.enums.OrderEvidenceType;
 import swp391.old_bicycle_project.entity.enums.PaymentMethod;
+import swp391.old_bicycle_project.repository.InspectionRepository;
 import swp391.old_bicycle_project.repository.ReviewRepository;
 import swp391.old_bicycle_project.service.OrderEvidenceService;
 import swp391.old_bicycle_project.service.PlatformFeeService;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -19,16 +22,19 @@ final class OrderViewSupport {
 
     private final ReviewRepository reviewRepository;
     private final OrderEvidenceService orderEvidenceService;
-        private final PlatformFeeService platformFeeService;
+    private final PlatformFeeService platformFeeService;
+    private final InspectionRepository inspectionRepository;
 
-        OrderViewSupport(
-                        ReviewRepository reviewRepository,
-                        OrderEvidenceService orderEvidenceService,
-                        PlatformFeeService platformFeeService
-        ) {
+    OrderViewSupport(
+            ReviewRepository reviewRepository,
+            OrderEvidenceService orderEvidenceService,
+            PlatformFeeService platformFeeService,
+            InspectionRepository inspectionRepository
+    ) {
         this.reviewRepository = reviewRepository;
         this.orderEvidenceService = orderEvidenceService;
-                this.platformFeeService = platformFeeService;
+        this.platformFeeService = platformFeeService;
+        this.inspectionRepository = inspectionRepository;
     }
 
     List<OrderResponseDTO> mapOrders(List<Order> orders) {
@@ -114,7 +120,18 @@ final class OrderViewSupport {
                 .cancelledAt(order.getCancelledAt())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
+                .productStatus(order.getProduct().getStatus().name())
+                .productIsVerified(isProductVerified(order))
                 .build();
+    }
+
+    private boolean isProductVerified(Order order) {
+        Inspection inspection = inspectionRepository.findByProductId(order.getProduct().getId()).orElse(null);
+        return inspection != null
+                && Boolean.TRUE.equals(inspection.getPassed())
+                && inspection.getValidUntil() != null
+                && inspection.getValidUntil().isAfter(LocalDateTime.now())
+                && order.getProduct().getDeletedAt() == null;
     }
 
         private boolean shouldNormalizeFeeSnapshot(Order order) {

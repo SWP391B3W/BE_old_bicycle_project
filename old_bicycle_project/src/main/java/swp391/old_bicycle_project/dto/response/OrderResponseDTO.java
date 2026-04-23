@@ -58,6 +58,8 @@ public class OrderResponseDTO {
     private LocalDateTime cancelledAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String productStatus;
+    private boolean productIsVerified;
 
     public static OrderResponseDTOBuilder builder() {
         return new OrderResponseDTOBuilder();
@@ -103,6 +105,8 @@ public class OrderResponseDTO {
         public OrderResponseDTOBuilder cancelledAt(LocalDateTime d) { k.cancelledAt = d; return this; }
         public OrderResponseDTOBuilder createdAt(LocalDateTime d) { k.createdAt = d; return this; }
         public OrderResponseDTOBuilder updatedAt(LocalDateTime d) { k.updatedAt = d; return this; }
+        public OrderResponseDTOBuilder productStatus(String s) { k.productStatus = s; return this; }
+        public OrderResponseDTOBuilder productIsVerified(boolean v) { k.productIsVerified = v; return this; }
         public OrderResponseDTO build() { return k; }
     }
 }

@@ -46,7 +46,7 @@ public class ReportController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return ApiResponse.<Page<Page<ReportResponseDTO>>>builder()
+        return ApiResponse.<Page<ReportResponseDTO>>builder()
                 .result(reportService.getMyReports(currentUser.getId(), pageable))
                 .build();
     }

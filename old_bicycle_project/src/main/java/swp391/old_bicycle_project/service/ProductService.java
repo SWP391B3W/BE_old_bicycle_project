@@ -30,6 +30,7 @@ import swp391.old_bicycle_project.repository.OrderRepository;
 import swp391.old_bicycle_project.repository.ProductImageRepository;
 import swp391.old_bicycle_project.repository.ProductRepository;
 import swp391.old_bicycle_project.repository.UserRepository;
+import swp391.old_bicycle_project.repository.WishlistRepository;
 import swp391.old_bicycle_project.specification.ProductSpecification;
 import swp391.old_bicycle_project.validation.MultipartFileValidationUtils;
 import swp391.old_bicycle_project.validation.PaginationValidationUtils;
@@ -74,6 +75,7 @@ public class ProductService {
     private final FrameMaterialRepository frameMaterialRepository;
     private final GroupsetRepository groupsetRepository;
     private final InspectionRepository inspectionRepository;
+    private final WishlistRepository wishlistRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final StorageService storageService;
@@ -125,12 +127,18 @@ public class ProductService {
                 OPEN_ORDER_STATUSES
         );
 
+        boolean isFavorite = currentUser != null && wishlistRepository.existsByUserIdAndProductId(
+                currentUser.getId(),
+                product.getId()
+        );
+
         return buildProductResponse(
                 product,
                 inspection,
                 hasExclusiveTransactionLock(product.getId()),
                 hasSellerActionLock(product.getId()),
                 hasPendingOrder,
+                isFavorite,
                 imageInfos,
                 sellerInfo
         );
@@ -387,6 +395,7 @@ public class ProductService {
                 hasExclusiveTransactionLock(product.getId()),
                 hasSellerActionLock(product.getId()),
                 false,
+                false,
                 imageInfos,
                 sellerInfo
         );
@@ -450,6 +459,7 @@ public class ProductService {
                     lockedProductIds.contains(product.getId()),
                     sellerActionLockedProductIds.contains(product.getId()),
                     false,
+                    false,
                     imageInfos,
                     sellerInfo
             );
@@ -462,6 +472,7 @@ public class ProductService {
             boolean lockedForTransaction,
             boolean sellerActionLocked,
             boolean currentUserHasPendingOrder,
+            boolean isFavorite,
             List<ProductResponse.ImageInfo> imageInfos,
             ProductResponse.SellerInfo sellerInfo
     ) {
@@ -504,6 +515,7 @@ public class ProductService {
                 .lockedForTransaction(lockedForTransaction)
                 .sellerActionLocked(sellerActionLocked)
                 .currentUserHasPendingOrder(currentUserHasPendingOrder)
+                .isFavorite(isFavorite)
                 .inspection(inspectionInfo)
                 .build();
     }
@@ -561,6 +573,11 @@ public class ProductService {
         }
         if (orderRepository.existsByProductIdAndStatusIn(product.getId(), OPEN_ORDER_STATUSES)) {
             throw new AppException(ErrorCode.INVALID_STATUS);
+        }
+
+        // Prevent modification if inspected
+        if (product.getStatus() == ProductStatus.inspected_passed || product.getStatus() == ProductStatus.inspected_failed) {
+            throw new AppException(ErrorCode.PRODUCT_ALREADY_INSPECTED);
         }
     }
 

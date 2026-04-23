@@ -37,6 +37,7 @@ public class ProductResponse {
     private boolean lockedForTransaction;
     private boolean sellerActionLocked;
     private boolean currentUserHasPendingOrder;
+    private boolean isFavorite;
     private InspectionInfo inspection;
 
     public ProductResponse() {}
@@ -97,6 +98,8 @@ public class ProductResponse {
     public void setSellerActionLocked(boolean sellerActionLocked) { this.sellerActionLocked = sellerActionLocked; }
     public boolean isCurrentUserHasPendingOrder() { return currentUserHasPendingOrder; }
     public void setCurrentUserHasPendingOrder(boolean currentUserHasPendingOrder) { this.currentUserHasPendingOrder = currentUserHasPendingOrder; }
+    public boolean isFavorite() { return isFavorite; }
+    public void setFavorite(boolean favorite) { isFavorite = favorite; }
     public InspectionInfo getInspection() { return inspection; }
     public void setInspection(InspectionInfo inspection) { this.inspection = inspection; }
 
@@ -132,6 +135,7 @@ public class ProductResponse {
         public ProductResponseBuilder lockedForTransaction(boolean locked) { pr.lockedForTransaction = locked; return this; }
         public ProductResponseBuilder sellerActionLocked(boolean locked) { pr.sellerActionLocked = locked; return this; }
         public ProductResponseBuilder currentUserHasPendingOrder(boolean hasOrder) { pr.currentUserHasPendingOrder = hasOrder; return this; }
+        public ProductResponseBuilder isFavorite(boolean isFavorite) { pr.isFavorite = isFavorite; return this; }
         public ProductResponseBuilder inspection(InspectionInfo inspection) { pr.inspection = inspection; return this; }
         public ProductResponse build() { return pr; }
     }

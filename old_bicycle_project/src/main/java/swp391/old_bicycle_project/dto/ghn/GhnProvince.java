@@ -1,14 +1,36 @@
 package swp391.old_bicycle_project.dto.ghn;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
 
-@Data
 public class GhnProvince {
     @JsonProperty("ProvinceID")
-    private Integer provinceID;
+    private Integer provinceId;
     @JsonProperty("ProvinceName")
     private String provinceName;
     @JsonProperty("Code")
     private String code;
+
+    public Integer getProvinceId() {
+        return provinceId;
+    }
+
+    public void setProvinceId(Integer provinceId) {
+        this.provinceId = provinceId;
+    }
+
+    public String getProvinceName() {
+        return provinceName;
+    }
+
+    public void setProvinceName(String provinceName) {
+        this.provinceName = provinceName;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
 }

@@ -128,7 +128,7 @@ public class OrderServiceImpl implements OrderService {
                 .sellerNetPayoutAmount(platformFeeQuote.sellerNetPayoutAmount())
                 .platformFeeStatus(platformFeeQuote.platformFeeStatus())
                 .paymentOption(paymentOption)
-                .paymentMethod(paymentMethod)
+                .paymentMethod(requestDTO.getPaymentMethod())
                 .fundingStatus(OrderFundingStatus.unpaid)
                 .status(OrderStatus.pending)
                 .build());

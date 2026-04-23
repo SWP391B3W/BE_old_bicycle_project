@@ -3,7 +3,6 @@ package swp391.old_bicycle_project.dto.ghn;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
-@Data
 public class GhnFeeRequest {
     @JsonProperty("service_id")
     private Integer serviceId = 53320; // Default service
@@ -30,4 +29,27 @@ public class GhnFeeRequest {
 
     @JsonProperty("insurance_value")
     private Integer insuranceValue = 10000; // Fake default insurance
+
+    public Integer getServiceId() { return serviceId; }
+    public void setServiceId(Integer serviceId) { this.serviceId = serviceId; }
+    public Integer getServiceTypeId() { return serviceTypeId; }
+    public void setServiceTypeId(Integer serviceTypeId) { this.serviceTypeId = serviceTypeId; }
+    public Integer getFromDistrictId() { return fromDistrictId; }
+    public void setFromDistrictId(Integer fromDistrictId) { this.fromDistrictId = fromDistrictId; }
+    public String getFromWardCode() { return fromWardCode; }
+    public void setFromWardCode(String fromWardCode) { this.fromWardCode = fromWardCode; }
+    public Integer getToDistrictId() { return toDistrictId; }
+    public void setToDistrictId(Integer toDistrictId) { this.toDistrictId = toDistrictId; }
+    public String getToWardCode() { return toWardCode; }
+    public void setToWardCode(String toWardCode) { this.toWardCode = toWardCode; }
+    public Integer getWeight() { return weight; }
+    public void setWeight(Integer weight) { this.weight = weight; }
+    public Integer getLength() { return length; }
+    public void setLength(Integer length) { this.length = length; }
+    public Integer getWidth() { return width; }
+    public void setWidth(Integer width) { this.width = width; }
+    public Integer getHeight() { return height; }
+    public void setHeight(Integer height) { this.height = height; }
+    public Integer getInsuranceValue() { return insuranceValue; }
+    public void setInsuranceValue(Integer insuranceValue) { this.insuranceValue = insuranceValue; }
 }

@@ -45,7 +45,7 @@ public class NotificationController {
                 .build();
     }
 
-    @PatchMapping("/{notificationId}/read")
+    @RequestMapping(value = "/{notificationId}/read", method = {RequestMethod.PATCH, RequestMethod.PUT})
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> markAsRead(
             @PathVariable UUID notificationId,
@@ -57,7 +57,7 @@ public class NotificationController {
                 .build();
     }
 
-    @PatchMapping("/me/read-all")
+    @RequestMapping(value = "/me/read-all", method = {RequestMethod.PATCH, RequestMethod.PUT})
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> markAllAsRead(@AuthenticationPrincipal User currentUser) {
         notificationService.markAllAsRead(currentUser.getId());

@@ -75,4 +75,21 @@ public class ProductCreateRequest {
     public ConditionType getCondition() { return condition; }
     public String getProvince() { return province; }
     public String getDistrict() { return district; }
+
+    // Manual Setters
+    public void setTitle(String title) { this.title = title; }
+    public void setDescription(String description) { this.description = description; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+    public void setOriginalPrice(BigDecimal originalPrice) { this.originalPrice = originalPrice; }
+    public void setBrakeTypeId(UUID brakeTypeId) { this.brakeTypeId = brakeTypeId; }
+    public void setFrameMaterialId(UUID frameMaterialId) { this.frameMaterialId = frameMaterialId; }
+    public void setBrandId(UUID brandId) { this.brandId = brandId; }
+    public void setCategoryId(UUID categoryId) { this.categoryId = categoryId; }
+    public void setFrameSize(String frameSize) { this.frameSize = frameSize; }
+    public void setWheelSize(String wheelSize) { this.wheelSize = wheelSize; }
+    public void setGroupsetId(UUID groupsetId) { this.groupsetId = groupsetId; }
+    public void setGroupset(String groupset) { this.groupset = groupset; }
+    public void setCondition(ConditionType condition) { this.condition = condition; }
+    public void setProvince(String province) { this.province = province; }
+    public void setDistrict(String district) { this.district = district; }
 }

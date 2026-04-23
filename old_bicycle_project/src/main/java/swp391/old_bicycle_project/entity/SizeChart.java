@@ -64,6 +64,8 @@ public class SizeChart {
     public String getName() { return name; }
     public String getDescription() { return description; }
     public List<SizeChartRow> getRows() { return rows; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 
     public void setCategory(Category category) { this.category = category; }
     public void setName(String name) { this.name = name; }

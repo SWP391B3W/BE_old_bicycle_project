@@ -33,6 +33,12 @@ public class ReportRequestDTO {
     public ReportReason getReason() { return reason; }
     public String getDescription() { return description; }
 
+    // Manual Setters
+    public void setTargetId(UUID targetId) { this.targetId = targetId; }
+    public void setTargetType(String targetType) { this.targetType = targetType; }
+    public void setReason(ReportReason reason) { this.reason = reason; }
+    public void setDescription(String description) { this.description = description; }
+
     // Manual Builder
     public static ReportRequestDTOBuilder builder() { return new ReportRequestDTOBuilder(); }
     public static class ReportRequestDTOBuilder {

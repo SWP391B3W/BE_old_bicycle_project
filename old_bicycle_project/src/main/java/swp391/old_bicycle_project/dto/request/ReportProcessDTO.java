@@ -22,6 +22,10 @@ public class ReportProcessDTO {
     public ReportStatus getStatus() { return status; }
     public String getAdminNote() { return adminNote; }
 
+    // Manual Setters
+    public void setStatus(ReportStatus status) { this.status = status; }
+    public void setAdminNote(String adminNote) { this.adminNote = adminNote; }
+
     // Manual Builder
     public static ReportProcessDTOBuilder builder() { return new ReportProcessDTOBuilder(); }
     public static class ReportProcessDTOBuilder {

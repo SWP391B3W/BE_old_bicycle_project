@@ -23,6 +23,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static swp391.old_bicycle_project.service.impl.PaymentSupportUtils.firstNonBlank;
 import static swp391.old_bicycle_project.service.impl.PaymentSupportUtils.hasText;
 import static swp391.old_bicycle_project.service.impl.PaymentSupportUtils.parseDateTime;
@@ -30,6 +33,8 @@ import static swp391.old_bicycle_project.service.impl.PaymentSupportUtils.serial
 import static swp391.old_bicycle_project.service.impl.PaymentSupportUtils.textOrNull;
 
 final class PaymentGatewaySupport {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentGatewaySupport.class);
 
     private static final DateTimeFormatter ORDER_CODE_TIMESTAMP_FORMAT =
             DateTimeFormatter.ofPattern("HHmmss");
@@ -240,7 +245,12 @@ final class PaymentGatewaySupport {
             HttpEntity<?> entity = body == null
                     ? new HttpEntity<>(headers)
                     : new HttpEntity<>(body, headers);
+            
+            log.info("Executing external SePay request: {} {}", method, url);
+            long start = System.currentTimeMillis();
             ResponseEntity<String> response = restTemplate.exchange(url, method, entity, String.class);
+            long duration = System.currentTimeMillis() - start;
+            log.info("SePay request completed in {}ms with status {}", duration, response.getStatusCode());
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 throw new AppException(ErrorCode.PAYMENT_GATEWAY_ERROR);

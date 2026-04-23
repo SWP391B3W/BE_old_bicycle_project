@@ -76,7 +76,6 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
     public PaymentRequestResponseDTO createUpfrontPaymentRequest(UUID orderId, User currentUser) {
         Order order = orderRepository.findByIdAndBuyerId(orderId, currentUser.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));

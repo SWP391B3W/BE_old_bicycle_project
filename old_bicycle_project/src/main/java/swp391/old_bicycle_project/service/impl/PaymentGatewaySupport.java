@@ -230,7 +230,8 @@ final class PaymentGatewaySupport {
             log.info("SePay request completed in {}ms with status {}", duration, response.getStatusCode());
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new AppException(ErrorCode.PAYMENT_GATEWAY_ERROR);
+                log.error("SePay v2 Error Response: Status={}, Body={}", response.getStatusCode(), response.getBody());
+                throw new RuntimeException("SePay API error: " + response.getStatusCode() + " - " + response.getBody());
             }
             return PaymentSupportUtils.parseJson(response.getBody(), objectMapper);
         } catch (RestClientException ex) {

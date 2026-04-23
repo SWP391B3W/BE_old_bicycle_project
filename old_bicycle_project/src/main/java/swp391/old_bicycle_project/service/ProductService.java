@@ -294,18 +294,42 @@ public class ProductService {
     @Transactional
     public ProductResponse show(UUID id, User currentUser) {
         Product product = findActiveProductById(id);
-        validateSellerCanModify(product, currentUser);
+
+        // validateSellerCanModify blocks "inspected" statuses — bypass that check here
+        // since we're restoring a hidden product, not modifying its content
+        if (!product.getSeller().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+        if (orderRepository.existsByProductIdAndStatusIn(product.getId(), OPEN_ORDER_STATUSES)) {
+            throw new AppException(ErrorCode.INVALID_STATUS);
+        }
 
         if (product.getStatus() != ProductStatus.hidden) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
-        product.setStatus(ProductStatus.pending_inspection);
-        product.setExpiresAt(LocalDateTime.now().plusDays(30));
-        createPendingInspection(product);
-        Product savedProduct = productRepository.save(product);
-        publishInspectionQueuedNotification(savedProduct);
-        return toResponse(savedProduct);
+        // Check if the existing inspection is still valid
+        Inspection inspection = inspectionRepository.findByProductId(product.getId()).orElse(null);
+        boolean inspectionStillValid = inspection != null
+                && Boolean.TRUE.equals(inspection.getPassed())
+                && inspection.getValidUntil() != null
+                && inspection.getValidUntil().isAfter(java.time.LocalDateTime.now());
+
+        if (inspectionStillValid) {
+            // Restore to active — no re-inspection needed
+            product.setStatus(ProductStatus.active);
+            product.setExpiresAt(inspection.getValidUntil());
+        } else {
+            // Inspection expired or never existed — queue for re-inspection
+            product.setStatus(ProductStatus.pending_inspection);
+            product.setExpiresAt(java.time.LocalDateTime.now().plusDays(30));
+            createPendingInspection(product);
+            Product savedProduct = productRepository.save(product);
+            publishInspectionQueuedNotification(savedProduct);
+            return toResponse(savedProduct);
+        }
+
+        return toResponse(productRepository.save(product));
     }
 
     public Page<ProductResponse> getMyProducts(User currentUser, int page, int size) {

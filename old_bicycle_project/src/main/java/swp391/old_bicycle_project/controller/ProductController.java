@@ -167,40 +167,6 @@ public class ProductController {
                 .build();
     }
 
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> updateProduct(
-            @PathVariable UUID id,
-            @ModelAttribute ProductUpdateRequest request,
-            @RequestPart(value = "request", required = false) JsonNode requestPayload,
-            @RequestPart(value = "images", required = false) List<MultipartFile> newImages,
-            @RequestPart(value = "images[]", required = false) List<MultipartFile> newImagesArray,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        List<MultipartFile> mergedImages = mergeFiles(newImages, newImagesArray);
-        ProductUpdateRequest resolvedRequest = requestPayload != null && !requestPayload.isNull()
-                ? normalizeUpdateRequest(requestPayload)
-                : request;
-        validateRequest(resolvedRequest);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, resolvedRequest, mergedImages, currentUser))
-                .build();
-    }
-
-    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> updateProductJson(
-            @PathVariable UUID id,
-                        @RequestBody JsonNode payload,
-            @AuthenticationPrincipal User currentUser
-    ) {
-                ProductUpdateRequest request = normalizeUpdateRequest(payload);
-                validateRequest(request);
-                List<String> imageUrls = extractImageUrls(payload);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, request, List.of(), imageUrls, currentUser))
-                .build();
-    }
 
         private ProductCreateRequest normalizeCreateRequest(JsonNode payload) {
                 if (payload == null || payload.isNull()) {

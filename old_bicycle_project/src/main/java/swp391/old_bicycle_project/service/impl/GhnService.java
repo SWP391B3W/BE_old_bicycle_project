@@ -173,6 +173,11 @@ public class GhnService {
 
             String url = ghnConfig.getApiUrl() + "/v2/shipping-order/fee";
             HttpEntity<GhnFeeRequest> entity = new HttpEntity<>(request, getShopHeaders());
+            
+            log.info("GHN Fee Request URL: {}", url);
+            log.info("GHN Fee Request Body: from_district={}, to_district={}, service_id={}, weight={}", 
+                request.getFromDistrictId(), request.getToDistrictId(), request.getServiceId(), request.getWeight());
+
             ResponseEntity<GhnResponse<GhnFeeResponse>> response = restTemplate.exchange(
                     url,
                     HttpMethod.POST,

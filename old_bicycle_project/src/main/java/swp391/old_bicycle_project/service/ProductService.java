@@ -261,11 +261,11 @@ public class ProductService {
             product.getImages().addAll(uploadedImages);
         }
 
-        product.setStatus(ProductStatus.pending);
+        product.setStatus(ProductStatus.pending_inspection);
         product.setExpiresAt(LocalDateTime.now().plusDays(30));
-        invalidateInspection(product);
+        createPendingInspection(product);
         Product savedProduct = productRepository.save(product);
-        publishAdminModerationNotification(savedProduct, "đã được người bán cập nhật và cần kiểm duyệt lại");
+        publishInspectionQueuedNotification(savedProduct);
 
         return toResponse(savedProduct);
     }
@@ -300,11 +300,11 @@ public class ProductService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
-        product.setStatus(ProductStatus.pending);
+        product.setStatus(ProductStatus.pending_inspection);
         product.setExpiresAt(LocalDateTime.now().plusDays(30));
-        invalidateInspection(product);
+        createPendingInspection(product);
         Product savedProduct = productRepository.save(product);
-        publishAdminModerationNotification(savedProduct, "đã được người bán hiển thị lại và cần kiểm duyệt lại");
+        publishInspectionQueuedNotification(savedProduct);
         return toResponse(savedProduct);
     }
 

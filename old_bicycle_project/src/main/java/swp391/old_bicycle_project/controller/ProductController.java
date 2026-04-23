@@ -46,163 +46,138 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductController {
 
-    private final ProductService productService;
-    private final Validator validator;
+        private final ProductService productService;
+        private final Validator validator;
 
-    @GetMapping
-    @Operation(
-            summary = "Lấy danh sách xe công khai",
-            description = "Để trống toàn bộ bộ lọc nếu muốn lấy tất cả tin đang hiển thị cho người mua. "
-                    + "Chỉ nhập các query param thực sự cần lọc, ví dụ keyword hoặc categoryId."
-    )
-    public ApiResponse<Page<ProductResponse>> searchProducts(
-            @Parameter(description = "Từ khóa tìm trong tiêu đề xe")
-            @RequestParam(required = false) String keyword,
-            @Parameter(description = "ID thương hiệu")
-            @RequestParam(required = false) UUID brandId,
-            @Parameter(description = "ID danh mục")
-            @RequestParam(required = false) UUID categoryId,
-            @Parameter(description = "ID loại phanh")
-            @RequestParam(required = false) UUID brakeTypeId,
-            @Parameter(description = "ID chất liệu khung")
-            @RequestParam(required = false) UUID frameMaterialId,
-            @Parameter(description = "Tình trạng xe")
-            @RequestParam(required = false) ConditionType condition,
-            @Parameter(description = "Kích thước khung")
-            @RequestParam(required = false) String frameSize,
-            @Parameter(description = "Kích thước bánh")
-            @RequestParam(required = false) String wheelSize,
-            @Parameter(description = "Nhóm truyền động")
-            @RequestParam(required = false) String groupset,
-            @Parameter(description = "ID groupset")
-            @RequestParam(required = false) UUID groupsetId,
-            @Parameter(description = "Giá tối thiểu")
-            @RequestParam(required = false) BigDecimal minPrice,
-            @Parameter(description = "Giá tối đa")
-            @RequestParam(required = false) BigDecimal maxPrice,
-            @Parameter(description = "Tỉnh hoặc thành phố")
-            @RequestParam(required = false) String province,
-            @Parameter(description = "Chỉ lấy xe có inspection hợp lệ")
-            @RequestParam(required = false) Boolean hasInspection,
-            @Parameter(description = "Cách sắp xếp")
-            @RequestParam(required = false) String sortBy,
-            @Parameter(description = "Trang bắt đầu từ 0", example = "0")
-            @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Số lượng phần tử mỗi trang", example = "12")
-            @RequestParam(defaultValue = "12") int size
-    ) {
-        ProductFilterRequest filter = new ProductFilterRequest();
-        filter.setKeyword(keyword);
-        filter.setBrandId(brandId);
-        filter.setCategoryId(categoryId);
-        filter.setBrakeTypeId(brakeTypeId);
-        filter.setFrameMaterialId(frameMaterialId);
-        filter.setCondition(condition);
-        filter.setFrameSize(frameSize);
-        filter.setWheelSize(wheelSize);
-        filter.setGroupset(groupset);
-        filter.setGroupsetId(groupsetId);
-        filter.setMinPrice(minPrice);
-        filter.setMaxPrice(maxPrice);
-        filter.setProvince(province);
-        filter.setHasInspection(hasInspection);
-        filter.setSortBy(sortBy);
+        @GetMapping
+        @Operation(summary = "Lấy danh sách xe công khai", description = "Để trống toàn bộ bộ lọc nếu muốn lấy tất cả tin đang hiển thị cho người mua. "
+                        + "Chỉ nhập các query param thực sự cần lọc, ví dụ keyword hoặc categoryId.")
+        public ApiResponse<Page<ProductResponse>> searchProducts(
+                        @Parameter(description = "Từ khóa tìm trong tiêu đề xe") @RequestParam(required = false) String keyword,
+                        @Parameter(description = "ID thương hiệu") @RequestParam(required = false) UUID brandId,
+                        @Parameter(description = "ID danh mục") @RequestParam(required = false) UUID categoryId,
+                        @Parameter(description = "ID loại phanh") @RequestParam(required = false) UUID brakeTypeId,
+                        @Parameter(description = "ID chất liệu khung") @RequestParam(required = false) UUID frameMaterialId,
+                        @Parameter(description = "Tình trạng xe") @RequestParam(required = false) ConditionType condition,
+                        @Parameter(description = "Kích thước khung") @RequestParam(required = false) String frameSize,
+                        @Parameter(description = "Kích thước bánh") @RequestParam(required = false) String wheelSize,
+                        @Parameter(description = "Nhóm truyền động") @RequestParam(required = false) String groupset,
+                        @Parameter(description = "ID groupset") @RequestParam(required = false) UUID groupsetId,
+                        @Parameter(description = "Giá tối thiểu") @RequestParam(required = false) BigDecimal minPrice,
+                        @Parameter(description = "Giá tối đa") @RequestParam(required = false) BigDecimal maxPrice,
+                        @Parameter(description = "Tỉnh hoặc thành phố") @RequestParam(required = false) String province,
+                        @Parameter(description = "Chỉ lấy xe có inspection hợp lệ") @RequestParam(required = false) Boolean hasInspection,
+                        @Parameter(description = "Cách sắp xếp") @RequestParam(required = false) String sortBy,
+                        @Parameter(description = "Trang bắt đầu từ 0", example = "0") @RequestParam(defaultValue = "0") int page,
+                        @Parameter(description = "Số lượng phần tử mỗi trang", example = "12") @RequestParam(defaultValue = "12") int size) {
+                ProductFilterRequest filter = new ProductFilterRequest();
+                filter.setKeyword(keyword);
+                filter.setBrandId(brandId);
+                filter.setCategoryId(categoryId);
+                filter.setBrakeTypeId(brakeTypeId);
+                filter.setFrameMaterialId(frameMaterialId);
+                filter.setCondition(condition);
+                filter.setFrameSize(frameSize);
+                filter.setWheelSize(wheelSize);
+                filter.setGroupset(groupset);
+                filter.setGroupsetId(groupsetId);
+                filter.setMinPrice(minPrice);
+                filter.setMaxPrice(maxPrice);
+                filter.setProvince(province);
+                filter.setHasInspection(hasInspection);
+                filter.setSortBy(sortBy);
 
-        return ApiResponse.<Page<ProductResponse>>builder()
-                .result(productService.searchProducts(filter, page, size))
-                .build();
-    }
+                return ApiResponse.<Page<ProductResponse>>builder()
+                                .result(productService.searchProducts(filter, page, size))
+                                .build();
+        }
 
-    @GetMapping("/{id}")
-    public ApiResponse<ProductResponse> getProduct(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.getById(id, currentUser))
-                .build();
-    }
+        @GetMapping("/{id}")
+        public ApiResponse<ProductResponse> getProduct(
+                        @PathVariable UUID id,
+                        @AuthenticationPrincipal User currentUser) {
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.getById(id, currentUser))
+                                .build();
+        }
 
-    @GetMapping("/my/{id}")
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> getMyProductById(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.getMineById(id, currentUser))
-                .build();
-    }
+        @GetMapping("/my/{id}")
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> getMyProductById(
+                        @PathVariable UUID id,
+                        @AuthenticationPrincipal User currentUser) {
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.getMineById(id, currentUser))
+                                .build();
+        }
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> createProduct(
-            @ModelAttribute ProductCreateRequest request,
-            @RequestPart(value = "request", required = false) JsonNode requestPayload,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images,
-            @RequestPart(value = "images[]", required = false) List<MultipartFile> imagesArray,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        List<MultipartFile> mergedImages = mergeFiles(images, imagesArray);
-        ProductCreateRequest resolvedRequest = requestPayload != null && !requestPayload.isNull()
-                ? normalizeCreateRequest(requestPayload)
-                : request;
-        validateRequest(resolvedRequest);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.create(resolvedRequest, mergedImages, currentUser))
-                .build();
-    }
+        @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> createProduct(
+                        @ModelAttribute ProductCreateRequest request,
+                        @RequestPart(value = "request", required = false) JsonNode requestPayload,
+                        @RequestPart(value = "images", required = false) List<MultipartFile> images,
+                        @RequestPart(value = "images[]", required = false) List<MultipartFile> imagesArray,
+                        @AuthenticationPrincipal User currentUser) {
+                List<MultipartFile> mergedImages = mergeFiles(images, imagesArray);
+                ProductCreateRequest resolvedRequest = requestPayload != null && !requestPayload.isNull()
+                                ? normalizeCreateRequest(requestPayload)
+                                : request;
+                validateRequest(resolvedRequest);
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.create(resolvedRequest, mergedImages, currentUser))
+                                .build();
+        }
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> createProductJson(
+        @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> createProductJson(
                         @RequestBody JsonNode payload,
-            @AuthenticationPrincipal User currentUser
-    ) {
+                        @AuthenticationPrincipal User currentUser) {
                 ProductCreateRequest request = normalizeCreateRequest(payload);
                 validateRequest(request);
                 List<String> imageUrls = extractImageUrls(payload);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.create(request, List.of(), imageUrls, currentUser))
-                .build();
-    }
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.create(request, List.of(), imageUrls, currentUser))
+                                .build();
+        }
 
-    // Sellers can edit while pending_inspection (before inspector evaluates).
-    // validateSellerCanModify() blocks editing once inspected_passed/inspected_failed.
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> updateProduct(
-            @PathVariable UUID id,
-            @ModelAttribute ProductUpdateRequest request,
-            @RequestPart(value = "request", required = false) JsonNode requestPayload,
-            @RequestPart(value = "images", required = false) List<MultipartFile> newImages,
-            @RequestPart(value = "images[]", required = false) List<MultipartFile> newImagesArray,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        List<MultipartFile> mergedImages = mergeFiles(newImages, newImagesArray);
-        ProductUpdateRequest resolvedRequest = requestPayload != null && !requestPayload.isNull()
-                ? normalizeUpdateRequest(requestPayload)
-                : request;
-        validateRequest(resolvedRequest);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, resolvedRequest, mergedImages, currentUser))
-                .build();
-    }
+        // Sellers can edit while pending_inspection (before inspector evaluates).
+        // validateSellerCanModify() blocks editing once
+        // inspected_passed/inspected_failed.
+        //
+        @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> updateProduct(
+                        @PathVariable UUID id,
+                        @ModelAttribute ProductUpdateRequest request,
+                        @RequestPart(value = "request", required = false) JsonNode requestPayload,
+                        @RequestPart(value = "images", required = false) List<MultipartFile> newImages,
+                        @RequestPart(value = "images[]", required = false) List<MultipartFile> newImagesArray,
+                        @AuthenticationPrincipal User currentUser) {
+                List<MultipartFile> mergedImages = mergeFiles(newImages, newImagesArray);
+                ProductUpdateRequest resolvedRequest = requestPayload != null && !requestPayload.isNull()
+                                ? normalizeUpdateRequest(requestPayload)
+                                : request;
+                validateRequest(resolvedRequest);
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.update(id, resolvedRequest, mergedImages, currentUser))
+                                .build();
+        }
 
-    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> updateProductJson(
-            @PathVariable UUID id,
-            @RequestBody JsonNode payload,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        ProductUpdateRequest request = normalizeUpdateRequest(payload);
-        validateRequest(request);
-        List<String> imageUrls = extractImageUrls(payload);
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, request, List.of(), imageUrls, currentUser))
-                .build();
-    }
+        @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> updateProductJson(
+                        @PathVariable UUID id,
+                        @RequestBody JsonNode payload,
+                        @AuthenticationPrincipal User currentUser) {
+                ProductUpdateRequest request = normalizeUpdateRequest(payload);
+                validateRequest(request);
+                List<String> imageUrls = extractImageUrls(payload);
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.update(id, request, List.of(), imageUrls, currentUser))
+                                .build();
+        }
 
         private ProductCreateRequest normalizeCreateRequest(JsonNode payload) {
                 if (payload == null || payload.isNull()) {
@@ -210,18 +185,23 @@ public class ProductController {
                 }
 
                 JsonNode base = pickObjectNode(payload,
-                                "request", "productCreateRequest", "createProductRequest", "product", "payload", "data");
+                                "request", "productCreateRequest", "createProductRequest", "product", "payload",
+                                "data");
                 JsonNode basicInfo = pickObjectNode(payload, "basicInfo", "basic_info");
                 JsonNode technicalSpecs = pickObjectNode(payload, "technicalSpecs", "technical_specs");
-                JsonNode priceLocation = pickObjectNode(payload, "priceLocation", "price_location", "pricing", "location");
+                JsonNode priceLocation = pickObjectNode(payload, "priceLocation", "price_location", "pricing",
+                                "location");
 
                 ProductCreateRequest request = new ProductCreateRequest();
                 request.setTitle(firstText(List.of(base, basicInfo, payload), "title"));
                 request.setDescription(firstText(List.of(base, basicInfo, payload), "description"));
                 request.setPrice(firstDecimal(List.of(base, priceLocation, payload), "price", "price_amount"));
-                request.setOriginalPrice(firstDecimal(List.of(base, priceLocation, payload), "originalPrice", "original_price"));
-                request.setBrakeTypeId(firstUuid(List.of(base, technicalSpecs, payload), "brakeTypeId", "brake_type_id"));
-                request.setFrameMaterialId(firstUuid(List.of(base, technicalSpecs, payload), "frameMaterialId", "frame_material_id"));
+                request.setOriginalPrice(
+                                firstDecimal(List.of(base, priceLocation, payload), "originalPrice", "original_price"));
+                request.setBrakeTypeId(
+                                firstUuid(List.of(base, technicalSpecs, payload), "brakeTypeId", "brake_type_id"));
+                request.setFrameMaterialId(firstUuid(List.of(base, technicalSpecs, payload), "frameMaterialId",
+                                "frame_material_id"));
                 request.setBrandId(firstUuid(List.of(base, basicInfo, payload), "brandId", "brand_id"));
                 request.setCategoryId(firstUuid(List.of(base, basicInfo, payload), "categoryId", "category_id"));
                 request.setFrameSize(firstText(List.of(base, technicalSpecs, payload), "frameSize", "frame_size"));
@@ -251,18 +231,23 @@ public class ProductController {
                 }
 
                 JsonNode base = pickObjectNode(payload,
-                                "request", "productUpdateRequest", "updateProductRequest", "product", "payload", "data");
+                                "request", "productUpdateRequest", "updateProductRequest", "product", "payload",
+                                "data");
                 JsonNode basicInfo = pickObjectNode(payload, "basicInfo", "basic_info");
                 JsonNode technicalSpecs = pickObjectNode(payload, "technicalSpecs", "technical_specs");
-                JsonNode priceLocation = pickObjectNode(payload, "priceLocation", "price_location", "pricing", "location");
+                JsonNode priceLocation = pickObjectNode(payload, "priceLocation", "price_location", "pricing",
+                                "location");
 
                 ProductUpdateRequest request = new ProductUpdateRequest();
                 request.setTitle(firstText(List.of(base, basicInfo, payload), "title"));
                 request.setDescription(firstText(List.of(base, basicInfo, payload), "description"));
                 request.setPrice(firstDecimal(List.of(base, priceLocation, payload), "price", "price_amount"));
-                request.setOriginalPrice(firstDecimal(List.of(base, priceLocation, payload), "originalPrice", "original_price"));
-                request.setBrakeTypeId(firstUuid(List.of(base, technicalSpecs, payload), "brakeTypeId", "brake_type_id"));
-                request.setFrameMaterialId(firstUuid(List.of(base, technicalSpecs, payload), "frameMaterialId", "frame_material_id"));
+                request.setOriginalPrice(
+                                firstDecimal(List.of(base, priceLocation, payload), "originalPrice", "original_price"));
+                request.setBrakeTypeId(
+                                firstUuid(List.of(base, technicalSpecs, payload), "brakeTypeId", "brake_type_id"));
+                request.setFrameMaterialId(firstUuid(List.of(base, technicalSpecs, payload), "frameMaterialId",
+                                "frame_material_id"));
                 request.setBrandId(firstUuid(List.of(base, basicInfo, payload), "brandId", "brand_id"));
                 request.setCategoryId(firstUuid(List.of(base, basicInfo, payload), "categoryId", "category_id"));
                 request.setFrameSize(firstText(List.of(base, technicalSpecs, payload), "frameSize", "frame_size"));
@@ -345,9 +330,9 @@ public class ProductController {
 
         private List<String> extractImageUrls(JsonNode payload) {
                 List<JsonNode> candidates = List.of(
-                                pickObjectNode(payload, "request", "productCreateRequest", "createProductRequest", "product", "payload", "data"),
-                                payload
-                );
+                                pickObjectNode(payload, "request", "productCreateRequest", "createProductRequest",
+                                                "product", "payload", "data"),
+                                payload);
 
                 for (JsonNode candidate : candidates) {
                         if (candidate == null) {
@@ -396,60 +381,56 @@ public class ProductController {
                 }
         }
 
-    private List<MultipartFile> mergeFiles(List<MultipartFile> first, List<MultipartFile> second) {
-        List<MultipartFile> merged = new ArrayList<>();
-        if (first != null && !first.isEmpty()) {
-            merged.addAll(first);
+        private List<MultipartFile> mergeFiles(List<MultipartFile> first, List<MultipartFile> second) {
+                List<MultipartFile> merged = new ArrayList<>();
+                if (first != null && !first.isEmpty()) {
+                        merged.addAll(first);
+                }
+                if (second != null && !second.isEmpty()) {
+                        merged.addAll(second);
+                }
+                return merged;
         }
-        if (second != null && !second.isEmpty()) {
-            merged.addAll(second);
+
+        @DeleteMapping("/{id}")
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<String> deleteProduct(
+                        @PathVariable UUID id,
+                        @AuthenticationPrincipal User currentUser) {
+                productService.delete(id, currentUser);
+                return ApiResponse.<String>builder()
+                                .result("Đã xóa tin đăng thành công")
+                                .build();
         }
-        return merged;
-    }
 
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<String> deleteProduct(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        productService.delete(id, currentUser);
-        return ApiResponse.<String>builder()
-                .result("Đã xóa tin đăng thành công")
-                .build();
-    }
+        @GetMapping("/my")
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<Page<ProductResponse>> getMyProducts(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "12") int size,
+                        @AuthenticationPrincipal User currentUser) {
+                return ApiResponse.<Page<ProductResponse>>builder()
+                                .result(productService.getMyProducts(currentUser, page, size))
+                                .build();
+        }
 
-    @GetMapping("/my")
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<Page<ProductResponse>> getMyProducts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        return ApiResponse.<Page<ProductResponse>>builder()
-                .result(productService.getMyProducts(currentUser, page, size))
-                .build();
-    }
+        @PatchMapping("/{id}/hide")
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> hideProduct(
+                        @PathVariable UUID id,
+                        @AuthenticationPrincipal User currentUser) {
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.hide(id, currentUser))
+                                .build();
+        }
 
-    @PatchMapping("/{id}/hide")
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> hideProduct(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.hide(id, currentUser))
-                .build();
-    }
-
-    @PatchMapping("/{id}/show")
-    @PreAuthorize("hasRole('SELLER')")
-    public ApiResponse<ProductResponse> showProduct(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.show(id, currentUser))
-                .build();
-    }
+        @PatchMapping("/{id}/show")
+        @PreAuthorize("hasRole('SELLER')")
+        public ApiResponse<ProductResponse> showProduct(
+                        @PathVariable UUID id,
+                        @AuthenticationPrincipal User currentUser) {
+                return ApiResponse.<ProductResponse>builder()
+                                .result(productService.show(id, currentUser))
+                                .build();
+        }
 }

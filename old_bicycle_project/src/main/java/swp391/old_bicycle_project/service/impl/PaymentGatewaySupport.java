@@ -100,7 +100,7 @@ final class PaymentGatewaySupport {
             throw new AppException(ErrorCode.PAYMENT_NOT_READY);
         }
 
-        String url = normalizeApiBaseUrl() + "/bidv/" + resolvedBankAccount.bankAccountId() + "/orders";
+        String url = normalizeApiBaseUrl() + "/v2/bank-accounts/" + resolvedBankAccount.bankAccountId() + "/orders";
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("amount", payment.getAmount());
         requestBody.put("order_code", payment.getGatewayOrderCode());
@@ -180,56 +180,27 @@ final class PaymentGatewaySupport {
     }
 
     private ResolvedBankAccount resolveBankAccount() {
-        JsonNode root = exchangeJson(normalizeApiBaseUrl() + "/bankaccounts/list", HttpMethod.GET, null, true);
-        JsonNode bankAccounts = root.path("bankaccounts");
-        if (!bankAccounts.isArray()) {
-            return null;
+        JsonNode root = exchangeJson(normalizeApiBaseUrl() + "/v2/bank-accounts", HttpMethod.GET, null, true);
+        JsonNode data = root.path("data");
+        if (!data.isArray()) {
+            data = root.path("bankaccounts");
+            if (!data.isArray()) return null;
         }
 
-        for (JsonNode bankAccount : bankAccounts) {
-            String bankAccountId = firstNonBlank(
-                    textOrNull(bankAccount, "id"),
-                    textOrNull(bankAccount, "bank_account_id")
-            );
-            String accountNumber = firstNonBlank(
-                    textOrNull(bankAccount, "account_number"),
-                    textOrNull(bankAccount, "accountNumber")
-            );
-            boolean matchesConfiguredId = hasText(sepayProperties.getBankAccountId())
-                    && sepayProperties.getBankAccountId().equals(bankAccountId);
-            boolean matchesConfiguredNumber = hasText(sepayProperties.getAccountNumber())
-                    && sepayProperties.getAccountNumber().equals(accountNumber);
-            if (matchesConfiguredId || matchesConfiguredNumber) {
-                return new ResolvedBankAccount(
-                        bankAccountId,
-                        accountNumber,
-                        firstNonBlank(
-                                textOrNull(bankAccount, "account_holder_name"),
-                                textOrNull(bankAccount, "label"),
-                                sepayProperties.getAccountName()
-                        ),
-                        firstNonBlank(
-                                textOrNull(bankAccount, "bank_bin"),
-                                sepayProperties.getBankBin()
-                        ),
-                        firstNonBlank(
-                                textOrNull(bankAccount, "bank_code"),
-                                textOrNull(bankAccount, "bank_short_name")
-                        ),
-                        textOrNull(bankAccount, "bank_short_name")
-                );
+        for (JsonNode node : data) {
+            String id = firstNonBlank(textOrNull(node, "ba_xid"), textOrNull(node, "id"));
+            String accountNumber = firstNonBlank(textOrNull(node, "bank_number"), textOrNull(node, "accountNumber"));
+            String accountName = firstNonBlank(textOrNull(node, "account_name"), textOrNull(node, "accountName"));
+            String bankBin = firstNonBlank(textOrNull(node, "bank_bin"), textOrNull(node, "bankBin"));
+            String bankCode = firstNonBlank(textOrNull(node, "bank_id"), textOrNull(node, "bankId"), textOrNull(node, "bankCode"));
+            String bankShortName = firstNonBlank(textOrNull(node, "bank_short_name"), textOrNull(node, "bankShortName"));
+
+            boolean matchesConfigId = hasText(sepayProperties.getBankAccountId()) && sepayProperties.getBankAccountId().equals(id);
+            boolean matchesConfigNum = hasText(sepayProperties.getAccountNumber()) && sepayProperties.getAccountNumber().equals(accountNumber);
+
+            if (matchesConfigId || matchesConfigNum || (sepayProperties.getBankAccountId() == null && sepayProperties.getAccountNumber() == null)) {
+                return new ResolvedBankAccount(id, accountNumber, accountName, bankBin, bankCode, bankShortName);
             }
-        }
-
-        if (hasText(sepayProperties.getBankAccountId()) || hasText(sepayProperties.getAccountNumber())) {
-            return new ResolvedBankAccount(
-                    sepayProperties.getBankAccountId(),
-                    sepayProperties.getAccountNumber(),
-                    sepayProperties.getAccountName(),
-                    sepayProperties.getBankBin(),
-                    null,
-                    null
-            );
         }
         return null;
     }
@@ -239,7 +210,13 @@ final class PaymentGatewaySupport {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             if (bearerAuth) {
-                headers.setBearerAuth(sepayProperties.getApiToken());
+                if (hasText(sepayProperties.getApiToken())) {
+                    String token = sepayProperties.getApiToken().trim();
+                    if (!token.toLowerCase().startsWith("bearer ")) {
+                        token = "Bearer " + token;
+                    }
+                    headers.set("Authorization", token);
+                }
             }
 
             HttpEntity<?> entity = body == null
@@ -264,7 +241,7 @@ final class PaymentGatewaySupport {
     private String normalizeApiBaseUrl() {
         String baseUrl = sepayProperties.getApiBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            return "https://my.sepay.vn/userapi";
+            return "https://userapi.sepay.vn";
         }
         return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     }

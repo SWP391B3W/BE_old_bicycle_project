@@ -14,6 +14,8 @@ import swp391.old_bicycle_project.service.OrderEvidenceService;
 import swp391.old_bicycle_project.service.StorageService;
 import swp391.old_bicycle_project.validation.MultipartFileValidationUtils;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,6 +33,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderEvidenceServiceImpl implements OrderEvidenceService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderEvidenceServiceImpl.class);
     private static final int MAX_EVIDENCE_FILES = 3;
 
     private final OrderEvidenceSubmissionRepository orderEvidenceSubmissionRepository;
@@ -121,19 +124,27 @@ public class OrderEvidenceServiceImpl implements OrderEvidenceService {
         try {
             for (int index = 0; index < normalizedFiles.size(); index++) {
                 MultipartFile file = normalizedFiles.get(index);
-                String fileUrl = storageService.uploadFile(file, buildFolder(order.getId(), evidenceType));
-                uploadedUrls.add(fileUrl);
-                submission.addFile(OrderEvidenceFile.builder()
-                        .fileUrl(fileUrl)
-                        .fileName(file.getOriginalFilename())
-                        .contentType(file.getContentType())
-                        .sortOrder(index)
-                        .build());
+                try {
+                    String fileUrl = storageService.uploadFile(file, buildFolder(order.getId(), evidenceType));
+                    uploadedUrls.add(fileUrl);
+                    submission.addFile(OrderEvidenceFile.builder()
+                            .fileUrl(fileUrl)
+                            .fileName(file.getOriginalFilename())
+                            .contentType(file.getContentType())
+                            .sortOrder(index)
+                            .build());
+                } catch (Exception uploadEx) {
+                    // Upload thất bại (Supabase chưa cấu hình đúng): ghi log và bỏ qua file này
+                    // để đơn hàng vẫn có thể tiếp tục flow bình thường
+                    log.warn("[Evidence] Upload file {} thất bại, bỏ qua: {}", file.getOriginalFilename(), uploadEx.getMessage());
+                }
             }
 
             return mapToDTO(orderEvidenceSubmissionRepository.save(submission));
         } catch (RuntimeException exception) {
-            uploadedUrls.forEach(storageService::deleteFile);
+            uploadedUrls.forEach(url -> {
+                try { storageService.deleteFile(url); } catch (Exception ignored) {}
+            });
             throw exception;
         }
     }

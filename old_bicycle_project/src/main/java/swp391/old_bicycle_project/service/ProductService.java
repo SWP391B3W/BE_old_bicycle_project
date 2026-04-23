@@ -285,7 +285,7 @@ public class ProductService {
     @Transactional
     public ProductResponse hide(UUID id, User currentUser) {
         Product product = findActiveProductById(id);
-        validateSellerCanModify(product, currentUser);
+        validateSellerCanHide(product, currentUser);
 
         product.setStatus(ProductStatus.hidden);
         return toResponse(productRepository.save(product));
@@ -561,6 +561,18 @@ public class ProductService {
     private void validateRequiredTechnicalFields(String frameSize, String wheelSize) {
         if (frameSize == null || frameSize.isBlank() || wheelSize == null || wheelSize.isBlank()) {
             throw new AppException(ErrorCode.PRODUCT_TECHNICAL_FIELDS_REQUIRED);
+        }
+    }
+
+    private void validateSellerCanHide(Product product, User currentUser) {
+        if (!product.getSeller().getId().equals(currentUser.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+        if (product.getStatus() == ProductStatus.sold || product.getStatus() == ProductStatus.hidden) {
+            throw new AppException(ErrorCode.INVALID_STATUS);
+        }
+        if (orderRepository.existsByProductIdAndStatusIn(product.getId(), OPEN_ORDER_STATUSES)) {
+            throw new AppException(ErrorCode.INVALID_STATUS);
         }
     }
 

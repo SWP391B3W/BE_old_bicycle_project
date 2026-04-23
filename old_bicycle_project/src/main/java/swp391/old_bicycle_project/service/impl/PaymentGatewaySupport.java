@@ -1,91 +1,120 @@
 package swp391.old_bicycle_project.service.impl;
 
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import swp391.old_bicycle_project.config.SepayProperties;
-import swp391.old_bicycle_project.dto.PaymentRequestDTO;
+import swp391.old_bicycle_project.dto.response.PaymentRequestResponseDTO;
+import swp391.old_bicycle_project.entity.Order;
+import swp391.old_bicycle_project.entity.Payment;
 import swp391.old_bicycle_project.exception.AppException;
 import swp391.old_bicycle_project.exception.ErrorCode;
-import swp391.old_bicycle_project.model.Order;
-import swp391.old_bicycle_project.model.Payment;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
 @Component
-@Slf4j
 final class PaymentGatewaySupport {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentGatewaySupport.class);
 
     private final SepayProperties sepayProperties;
     private final RestTemplate restTemplate;
 
-    PaymentGatewaySupport(SepayProperties sepayProperties, RestTemplate restTemplate) {
+    PaymentGatewaySupport(SepayProperties sepayProperties, ObjectMapper objectMapper, RestTemplate restTemplate) {
         this.sepayProperties = sepayProperties;
         this.restTemplate = restTemplate;
     }
 
-    public PaymentRequestDTO createUpfrontPaymentRequest(Order order, Payment payment) {
-        String baXid = sepayProperties.getBankAccountId();
-        String apiToken = sepayProperties.getApiToken();
-        
-        // KIỂM TRA: Nếu baXid là số thuần túy (v1), dùng endpoint v1 như thời ngrok
-        boolean isV1 = baXid != null && baXid.matches("\\d+");
-        
-        String url;
-        if (isV1) {
-            // Quay lại công thức v1 ổn định: apikey truyền vào URL
-            url = String.format("https://my.sepay.vn/userapi/orders/create?apikey=%s&bank_account_id=%s", 
-                                apiToken, baXid);
-            log.info("Using SePay v1 compatibility mode (ngrok style) for ID: {}", baXid);
-        } else {
-            // Dùng v2 nếu là UUID
-            url = "https://userapi.sepay.vn/v2/bank-accounts/" + baXid + "/orders";
-            log.info("Using SePay v2 mode for UUID: {}", baXid);
+    public void validateSepayConfigurationForCurrentMode() {
+        if (sepayProperties.isMockMode()) {
+            log.info("Payment Gateway is running in MOCK MODE.");
+            return;
+        }
+        log.info("Payment Gateway is running in LIVE MODE.");
+    }
+
+    public String generateGatewayOrderCode(Order order) {
+        String shortId = order.getId() != null
+                ? order.getId().toString().replace("-", "").substring(0, 8)
+                : String.valueOf(System.currentTimeMillis() % 100000);
+        return "OB-" + shortId.toUpperCase() + "-" + (System.currentTimeMillis() / 1000 % 10000);
+    }
+
+    public PaymentProvisionResult provisionPayment(Order order, Payment payment) {
+        if (sepayProperties.isMockMode() || sepayProperties.getApiToken() == null) {
+            log.info("[MOCK/STATIC] Building static QR provision for order: {}", order.getId());
+            return buildStaticProvision(order, payment);
         }
 
+        String baXid = sepayProperties.getBankAccountId();
+        String apiToken = sepayProperties.getApiToken();
+        String baseUrl = sepayProperties.getApiBaseUrl() != null
+                ? sepayProperties.getApiBaseUrl().replaceAll("/$", "")
+                : "https://my.sepay.vn/userapi";
+
+        String url = baseUrl + "/orders/create?apikey=" + apiToken + "&bank_account_id=" + baXid;
+
         Map<String, Object> body = new HashMap<>();
-        body.put("amount", payment.getAmount());
+        body.put("amount", payment.getAmount().longValue());
         body.put("description", payment.getGatewayOrderCode());
         body.put("order_id", payment.getGatewayOrderCode());
 
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            if (!isV1) {
-                headers.set("Authorization", "Bearer " + apiToken);
-            }
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
-                log.error("SePay API Error: Status={}, Body={}", response.getStatusCode(), response.getBody());
-                throw new AppException(ErrorCode.PAYMENT_GATEWAY_ERROR);
+                log.warn("SePay returned {}, falling back to static QR.", response.getStatusCode());
+                return buildStaticProvision(order, payment);
             }
 
-            // QR Code link static cực nhanh
-            String qrUrl = String.format("https://qr.sepay.vn/img?bank=%s&acc=%s&template=compact&amount=%d&des=%s",
-                    sepayProperties.getBankBin(),
-                    sepayProperties.getAccountNumber(),
-                    payment.getAmount().longValue(),
-                    payment.getGatewayOrderCode());
-
-            return new PaymentRequestDTO(
-                null,
-                qrUrl,
-                sepayProperties.getBankBin(),
-                sepayProperties.getAccountNumber(),
-                sepayProperties.getAccountName(),
-                payment.getGatewayOrderCode(),
-                "Thanh toan don hang " + order.getId(),
-                order.getPaymentDeadline(),
-                null
-            );
+            return buildStaticProvision(order, payment);
         } catch (Exception e) {
-            log.error("Payment Gateway Fatal Error: ", e);
-            throw new AppException(ErrorCode.PAYMENT_GATEWAY_ERROR);
+            log.error("SePay connection failed, falling back to static QR: {}", e.getMessage());
+            return buildStaticProvision(order, payment);
         }
+    }
+
+    // PaymentProvisionResult có 9 tham số (theo PaymentSupportModels.java):
+    // checkoutUrl, qrCodeUrl, bankBin, bankAccountNumber, bankAccountName,
+    // transferContent, instructions, expiresAt, gatewayResponse
+    private PaymentProvisionResult buildStaticProvision(Order order, Payment payment) {
+        String qrUrl = "https://img.vietqr.io/image/"
+                + sepayProperties.getBankBin()
+                + "-"
+                + sepayProperties.getAccountNumber()
+                + "-compact2.png?amount="
+                + payment.getAmount().longValue()
+                + "&addInfo="
+                + URLEncoder.encode(payment.getGatewayOrderCode(), StandardCharsets.UTF_8)
+                + "&accountName="
+                + URLEncoder.encode(sepayProperties.getAccountName() != null ? sepayProperties.getAccountName() : "", StandardCharsets.UTF_8);
+
+        String instructions = "Chuyển khoản đúng số tiền "
+                + payment.getAmount().toPlainString()
+                + " VND với nội dung "
+                + payment.getGatewayOrderCode()
+                + ". Hệ thống sẽ tự động xác nhận.";
+
+        return new PaymentProvisionResult(
+                null,                                   // checkoutUrl
+                qrUrl,                                  // qrCodeUrl
+                sepayProperties.getBankBin(),           // bankBin
+                sepayProperties.getAccountNumber(),     // bankAccountNumber
+                sepayProperties.getAccountName(),       // bankAccountName
+                payment.getGatewayOrderCode(),          // transferContent
+                instructions,                           // instructions
+                order.getPaymentDeadline(),             // expiresAt
+                null                                    // gatewayResponse
+        );
     }
 }

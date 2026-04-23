@@ -4,19 +4,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "system_settings")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class SystemSetting {
 
     @Id
@@ -28,4 +18,31 @@ public class SystemSetting {
 
     @Column(name = "description")
     private String description;
+
+    public SystemSetting() {}
+
+    public SystemSetting(String key, String value, String description) {
+        this.key = key;
+        this.value = value;
+        this.description = description;
+    }
+
+    public String getKey() { return key; }
+    public void setKey(String key) { this.key = key; }
+
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public static SystemSettingBuilder builder() { return new SystemSettingBuilder(); }
+
+    public static class SystemSettingBuilder {
+        private final SystemSetting r = new SystemSetting();
+        public SystemSettingBuilder key(String key) { r.key = key; return this; }
+        public SystemSettingBuilder value(String value) { r.value = value; return this; }
+        public SystemSettingBuilder description(String description) { r.description = description; return this; }
+        public SystemSetting build() { return r; }
+    }
 }

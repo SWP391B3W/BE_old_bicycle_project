@@ -82,6 +82,16 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public Page<ReviewResponseDTO> getBuyerReviews(UUID buyerId, Pageable pageable) {
+        if (!userRepository.existsById(buyerId)) {
+            throw new AppException(ErrorCode.USER_NOT_EXISTED);
+        }
+
+        Page<Review> reviews = reviewRepository.findByReviewerIdOrderByCreatedAtDesc(buyerId, pageable);
+        return reviews.map(this::mapToDTO);
+    }
+
+    @Override
     @Transactional
     public ReviewResponseDTO replyToReview(UUID reviewId, UUID currentUserId, ReviewReplyRequestDTO requestDTO) {
         Review review = reviewRepository.findWithDetailsById(reviewId)

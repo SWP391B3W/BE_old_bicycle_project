@@ -23,9 +23,13 @@ public class ReviewRequestDTO {
     @NotBlank(message = "Comment is required")
     private String comment;
 
+    @NotNull(message = "Order ID is required")
+    private java.util.UUID orderId;
+
     // Manual Getter
     public Integer getRating() { return rating; }
     public String getComment() { return comment; }
+    public java.util.UUID getOrderId() { return orderId; }
 
     // Manual Builder
     public static ReviewRequestDTOBuilder builder() { return new ReviewRequestDTOBuilder(); }
@@ -33,6 +37,7 @@ public class ReviewRequestDTO {
         private ReviewRequestDTO r = new ReviewRequestDTO();
         public ReviewRequestDTOBuilder rating(Integer rating) { r.rating = rating; return this; }
         public ReviewRequestDTOBuilder comment(String comment) { r.comment = comment; return this; }
+        public ReviewRequestDTOBuilder orderId(java.util.UUID orderId) { r.orderId = orderId; return this; }
         public ReviewRequestDTO build() { return r; }
     }
 }

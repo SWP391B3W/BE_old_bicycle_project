@@ -24,4 +24,9 @@ public interface ReviewService {
      * Seller creates or updates a reply to a buyer review.
      */
     ReviewResponseDTO replyToReview(UUID reviewId, UUID currentUserId, ReviewReplyRequestDTO requestDTO);
+
+    /**
+     * Get paginated reviews submitted by a specific buyer
+     */
+    Page<ReviewResponseDTO> getBuyerReviews(UUID buyerId, Pageable pageable);
 }

@@ -96,7 +96,9 @@ public class SecurityConfig {
                                                                 "/api/frame-materials",
                                                                 "/api/groupsets",
                                                                 "/api/size-charts/category/*",
-                                                                "/api/users/*/reviews")
+                                                                "/api/users/*/reviews",
+                                                                "/api/reviews/seller/**",
+                                                                "/api/users/*/public")
                                                 .permitAll()
 
                                                 // ===== WebSocket =====
@@ -109,8 +111,6 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                                                 // ===== Inspector =====
-                                                .requestMatchers(HttpMethod.POST, "/api/inspections/request/*")
-                                                .hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.POST, "/api/inspections/evaluate/*")
                                                 .hasAnyRole("INSPECTOR", "ADMIN")
                                                 .requestMatchers(HttpMethod.POST, "/api/inspections/report/*")

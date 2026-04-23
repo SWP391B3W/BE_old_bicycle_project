@@ -24,6 +24,10 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     @EntityGraph(attributePaths = {"order", "reviewer", "reviewee"})
     Page<Review> findByRevieweeIdOrderByCreatedAtDesc(UUID revieweeId, Pageable pageable);
 
+    // Get all reviews submitted by a specific buyer (reviewer)
+    @EntityGraph(attributePaths = {"order", "reviewer", "reviewee"})
+    Page<Review> findByReviewerIdOrderByCreatedAtDesc(UUID reviewerId, Pageable pageable);
+
     // Optional: Get a specific review by order
     @EntityGraph(attributePaths = {"order", "reviewer", "reviewee"})
     Optional<Review> findByOrderId(UUID orderId);

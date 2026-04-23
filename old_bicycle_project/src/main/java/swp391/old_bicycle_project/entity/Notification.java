@@ -2,7 +2,6 @@ package swp391.old_bicycle_project.entity;
 
 import swp391.old_bicycle_project.entity.enums.NotificationType;
 import jakarta.persistence.*;
-import lombok.*;
 import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.JdbcType;
 import org.hibernate.dialect.PostgreSQLEnumJdbcType;
@@ -13,11 +12,6 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "notifications")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Notification {
 
     @Id
@@ -39,7 +33,6 @@ public class Notification {
     @Column(name = "type", nullable = false, columnDefinition = "notification_type")
     private NotificationType type;
 
-    @Builder.Default
     @Column(name = "is_read")
     private Boolean isRead = false;
 
@@ -47,18 +40,22 @@ public class Notification {
     @ColumnTransformer(read = "metadata::text", write = "?::jsonb")
     private String metadata;
 
-    @Builder.Default
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now(ZoneOffset.UTC);
+
+    public Notification() {}
 
     @PrePersist
     void ensureCreatedAt() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now(ZoneOffset.UTC);
         }
+        if (isRead == null) {
+            isRead = false;
+        }
     }
 
-    // Manual Getter
+    // Getters
     public UUID getId() { return id; }
     public User getUser() { return user; }
     public String getTitle() { return title; }
@@ -68,13 +65,21 @@ public class Notification {
     public String getMetadata() { return metadata; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 
-    // Manual Setter for isRead (Service uses setIsRead)
+    // Setters
+    public void setId(UUID id) { this.id = id; }
+    public void setUser(User user) { this.user = user; }
+    public void setTitle(String title) { this.title = title; }
+    public void setContent(String content) { this.content = content; }
+    public void setType(NotificationType type) { this.type = type; }
     public void setIsRead(Boolean isRead) { this.isRead = isRead; }
+    public void setMetadata(String metadata) { this.metadata = metadata; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    // Manual Builder
+    // Builder
     public static NotificationBuilder builder() { return new NotificationBuilder(); }
+
     public static class NotificationBuilder {
-        private Notification r = new Notification();
+        private final Notification r = new Notification();
         public NotificationBuilder id(UUID id) { r.id = id; return this; }
         public NotificationBuilder user(User user) { r.user = user; return this; }
         public NotificationBuilder title(String title) { r.title = title; return this; }

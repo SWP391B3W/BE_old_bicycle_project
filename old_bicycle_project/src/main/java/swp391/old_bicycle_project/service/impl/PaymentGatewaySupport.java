@@ -42,6 +42,7 @@ final class PaymentGatewaySupport {
     private final SepayProperties sepayProperties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private ResolvedBankAccount cachedBankAccount;
 
     PaymentGatewaySupport(SepayProperties sepayProperties, ObjectMapper objectMapper, RestTemplate restTemplate) {
         this.sepayProperties = sepayProperties;
@@ -180,7 +181,16 @@ final class PaymentGatewaySupport {
     }
 
     private ResolvedBankAccount resolveBankAccount() {
-        JsonNode root = exchangeJson(normalizeApiBaseUrl() + "/v2/bank-accounts", HttpMethod.GET, null, true);
+        if (cachedBankAccount != null) {
+            return cachedBankAccount;
+        }
+        
+        // Nếu bạn đã cung cấp UUID và các thông tin khác, ta có thể tối ưu
+        // Nhưng hiện tại để đảm bảo lấy đúng Bank BIN và Name từ SePay, ta vẫn gọi API
+        // nhưng sẽ kiểm tra và log kỹ hơn.
+        
+        String url = normalizeApiBaseUrl() + "/v2/bank-accounts";
+        JsonNode root = exchangeJson(url, HttpMethod.GET, null, true);
         JsonNode data = root.path("data");
         if (!data.isArray()) {
             data = root.path("bankaccounts");
@@ -199,7 +209,8 @@ final class PaymentGatewaySupport {
             boolean matchesConfigNum = hasText(sepayProperties.getAccountNumber()) && sepayProperties.getAccountNumber().equals(accountNumber);
 
             if (matchesConfigId || matchesConfigNum || (sepayProperties.getBankAccountId() == null && sepayProperties.getAccountNumber() == null)) {
-                return new ResolvedBankAccount(id, accountNumber, accountName, bankBin, bankCode, bankShortName);
+                this.cachedBankAccount = new ResolvedBankAccount(id, accountNumber, accountName, bankBin, bankCode, bankShortName);
+                return cachedBankAccount;
             }
         }
         return null;

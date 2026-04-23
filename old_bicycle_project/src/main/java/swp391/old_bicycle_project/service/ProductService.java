@@ -692,7 +692,7 @@ public class ProductService {
             inspection.setExpertNotes(null);
             inspection.setPassed(false);
             inspection.setReportFileUrl(null);
-            inspection.setValidUntil(LocalDateTime.now());
+            inspection.setValidUntil(null); // null = no valid inspection, consistent with createPendingInspection
             inspectionRepository.save(inspection);
         });
     }

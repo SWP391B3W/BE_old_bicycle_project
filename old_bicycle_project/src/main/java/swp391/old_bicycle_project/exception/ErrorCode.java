@@ -62,7 +62,8 @@ public enum ErrorCode {
     PRODUCT_IMAGE_INVALID(1050, "Chỉ chấp nhận file ảnh hợp lệ cho sản phẩm", HttpStatus.BAD_REQUEST),
     INSPECTION_REPORT_INVALID(1051, "Chỉ chấp nhận file PDF hợp lệ cho báo cáo kiểm định", HttpStatus.BAD_REQUEST),
     ORDER_ALREADY_EXISTS(1052, "Bạn đã có một đơn mua cho sản phẩm này", HttpStatus.BAD_REQUEST),
-    PRODUCT_ALREADY_INSPECTED(1053, "Sản phẩm đã được kiểm định và không thể thay đổi thông tin", HttpStatus.BAD_REQUEST);
+    PRODUCT_ALREADY_INSPECTED(1053, "Sản phẩm đã được kiểm định và không thể thay đổi thông tin", HttpStatus.BAD_REQUEST),
+    PRODUCT_NOT_AVAILABLE(1054, "Sản phẩm không còn khả dụng để giao dịch (đã bị ẩn, xóa hoặc hết hạn kiểm định)", HttpStatus.GONE);
 
     ErrorCode(int code, String message, HttpStatus statusCode) {
         this.code = code;

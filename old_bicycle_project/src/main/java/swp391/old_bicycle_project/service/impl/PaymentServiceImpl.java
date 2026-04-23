@@ -99,6 +99,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // Critical Check: Ensure product is still available and verified
+        Product product = order.getProduct();
+        if (product == null || product.getDeletedAt() != null || product.getStatus() == ProductStatus.sold || product.getStatus() == ProductStatus.hidden) {
+            throw new AppException(ErrorCode.PRODUCT_NOT_AVAILABLE);
+        }
+        
+        // Check if the product has changed status or inspection expired since order was created
+        if (product.getStatus() != ProductStatus.active && product.getStatus() != ProductStatus.inspected_passed) {
+             throw new AppException(ErrorCode.PRODUCT_NOT_AVAILABLE);
+        }
+
         paymentGatewaySupport.validateSepayConfigurationForCurrentMode();
 
         Payment existingPayment = paymentRepository

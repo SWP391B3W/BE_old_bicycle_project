@@ -123,7 +123,12 @@ public class InspectionServiceImpl implements InspectionService {
 
         double averageScore = (dto.getFrameScore() + dto.getForkScore() + dto.getBrakesScore()
                 + dto.getDrivetrainScore() + dto.getWheelsScore()) / 5.0;
-        BigDecimal overallScore = BigDecimal.valueOf(averageScore).setScale(1, RoundingMode.HALF_UP);
+        
+        int wearPercentage = dto.getWearPercentage() != null ? dto.getWearPercentage() : 0;
+        wearPercentage = Math.max(0, Math.min(100, wearPercentage));
+        double adjustedScore = averageScore * (1.0 - (wearPercentage / 100.0));
+        
+        BigDecimal overallScore = BigDecimal.valueOf(Math.max(0, adjustedScore)).setScale(1, RoundingMode.HALF_UP);
 
         inspection.setInspector(inspector);
         inspection.setFrameScore(dto.getFrameScore());

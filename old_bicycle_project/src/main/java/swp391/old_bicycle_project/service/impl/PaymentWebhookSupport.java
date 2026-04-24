@@ -28,7 +28,7 @@ final class PaymentWebhookSupport {
     private static final Pattern GATEWAY_ORDER_CODE_PATTERN =
             Pattern.compile("(?i)OB-[A-Z0-9-]{5,40}");
     private static final Pattern COMPACT_GATEWAY_ORDER_CODE_PATTERN =
-            Pattern.compile("(?i)OB[A-Z0-9]{18}");
+            Pattern.compile("(?i)OB[A-Z0-9]{8,18}");
 
     private final PaymentRepository paymentRepository;
     private final SepayProperties sepayProperties;
@@ -192,12 +192,20 @@ final class PaymentWebhookSupport {
         }
 
         String alphanumericOnly = rawValue.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
-        if (!alphanumericOnly.startsWith("OB") || alphanumericOnly.length() != 20) {
+        if (!alphanumericOnly.startsWith("OB")) {
             return null;
         }
 
-        String compactBody = alphanumericOnly.substring(2);
-        return "OB-" + compactBody.substring(0, 12) + "-" + compactBody.substring(12);
+        int length = alphanumericOnly.length();
+        if (length == 20) {
+            String compactBody = alphanumericOnly.substring(2);
+            return "OB-" + compactBody.substring(0, 12) + "-" + compactBody.substring(12);
+        } else if (length >= 10 && length <= 14) {
+            String compactBody = alphanumericOnly.substring(2);
+            return "OB-" + compactBody.substring(0, 8) + "-" + compactBody.substring(8);
+        }
+
+        return null;
     }
 
     private String resolveTransactionReference(SepayWebhookRequestDTO requestDTO) {

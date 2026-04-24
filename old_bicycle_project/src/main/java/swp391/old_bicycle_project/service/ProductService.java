@@ -383,7 +383,6 @@ public class ProductService {
         }
 
         product.setStatus(ProductStatus.hidden);
-        invalidateInspection(product);
         productRepository.save(product);
     }
 

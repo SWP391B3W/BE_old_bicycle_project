@@ -126,7 +126,7 @@ final class PayoutExecutionSupport {
         payoutNotificationSupport.publishOrderNotification(
                 order.getSeller().getId(),
                 "Tin đăng đã bị ẩn sau khi hoàn tiền",
-                "Admin đã hoàn tất hoàn tiền cho đơn hàng này. Tin đăng liên quan đã bị ẩn và cần cập nhật, duyệt lại, rồi kiểm định lại trước khi bán tiếp.",
+                "Admin đã hoàn tất hoàn tiền cho đơn hàng này. Tin đăng liên quan đã bị ẩn tự động. Bạn có thể thiết lập hiển thị lại tin đăng để tiếp tục bán nếu thời hạn kiểm định vẫn còn hiệu lực.",
                 "{\"orderId\":\"" + order.getId() + "\",\"productId\":\"" + order.getProduct().getId() + "\"}"
         );
 

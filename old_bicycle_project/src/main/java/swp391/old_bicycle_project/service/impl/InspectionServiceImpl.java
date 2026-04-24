@@ -48,384 +48,394 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InspectionServiceImpl implements InspectionService {
 
-    @Value("${supabase.storage.inspection-report-bucket:inspection-reports}")
-    private String inspectionReportBucket;
+        @Value("${supabase.storage.inspection-report-bucket:inspection-reports}")
+        private String inspectionReportBucket;
 
-    private final InspectionRepository inspectionRepository;
-    private final ProductRepository productRepository;
-    private final ProductImageRepository productImageRepository;
-    private final UserRepository userRepository;
-    private final StorageService storageService;
-    private final ApplicationEventPublisher eventPublisher;
+        private final InspectionRepository inspectionRepository;
+        private final ProductRepository productRepository;
+        private final ProductImageRepository productImageRepository;
+        private final UserRepository userRepository;
+        private final StorageService storageService;
+        private final ApplicationEventPublisher eventPublisher;
 
-    @Override
-    @Transactional
-    public InspectionResponseDTO requestInspection(UUID productId, UUID moderatorId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+        @Override
+        @Transactional
+        public InspectionResponseDTO requestInspection(UUID productId, UUID moderatorId) {
+                Product product = productRepository.findById(productId)
+                                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        userRepository.findById(moderatorId)
-                .filter(user -> user.getRole() == AppRole.admin)
-                .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
+                userRepository.findById(moderatorId)
+                                .filter(user -> user.getRole() == AppRole.admin)
+                                .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
 
-        if (product.getStatus() != ProductStatus.pending
-                && product.getStatus() != ProductStatus.active
-                && product.getStatus() != ProductStatus.inspected_failed
-                && product.getStatus() != ProductStatus.inspected_passed) {
-            throw new AppException(ErrorCode.INVALID_STATUS);
+                if (product.getStatus() != ProductStatus.pending
+                                && product.getStatus() != ProductStatus.active
+                                && product.getStatus() != ProductStatus.inspected_failed
+                                && product.getStatus() != ProductStatus.inspected_passed) {
+                        throw new AppException(ErrorCode.INVALID_STATUS);
+                }
+
+                Inspection inspection = inspectionRepository.findByProductId(productId)
+                                .orElseGet(() -> Inspection.builder()
+                                                .product(product)
+                                                .build());
+
+                inspection.setInspector(null);
+                inspection.setOverallScore(null);
+                inspection.setFrameScore(null);
+                inspection.setForkScore(null);
+                inspection.setBrakesScore(null);
+                inspection.setDrivetrainScore(null);
+                inspection.setWheelsScore(null);
+                inspection.setWearPercentage(null);
+                inspection.setExpertNotes(null);
+                inspection.setPassed(false);
+                inspection.setReportFileUrl(null);
+                inspection.setValidUntil(null);
+                inspection = inspectionRepository.save(inspection);
+
+                product.setStatus(ProductStatus.pending_inspection);
+                productRepository.save(product);
+
+                publishInspectionQueuedNotification(product);
+
+                return mapToDTO(inspection);
         }
 
-        Inspection inspection = inspectionRepository.findByProductId(productId)
-                .orElseGet(() -> Inspection.builder()
-                        .product(product)
-                        .build());
+        @Override
+        @Transactional
+        public InspectionResponseDTO evaluateInspection(UUID productId, UUID inspectorId, InspectionEvaluationDTO dto) {
+                Product product = productRepository.findById(productId)
+                                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        inspection.setInspector(null);
-        inspection.setOverallScore(null);
-        inspection.setFrameScore(null);
-        inspection.setForkScore(null);
-        inspection.setBrakesScore(null);
-        inspection.setDrivetrainScore(null);
-        inspection.setWheelsScore(null);
-        inspection.setWearPercentage(null);
-        inspection.setExpertNotes(null);
-        inspection.setPassed(false);
-        inspection.setReportFileUrl(null);
-        inspection.setValidUntil(null);
-        inspection = inspectionRepository.save(inspection);
+                User inspector = userRepository.findById(inspectorId)
+                                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        product.setStatus(ProductStatus.pending_inspection);
-        productRepository.save(product);
+                if (product.getStatus() != ProductStatus.pending_inspection) {
+                        throw new AppException(ErrorCode.INVALID_STATUS);
+                }
 
-        publishInspectionQueuedNotification(product);
+                Inspection inspection = inspectionRepository.findByProductId(productId)
+                                .orElseGet(() -> Inspection.builder()
+                                                .product(product)
+                                                .createdAt(product.getUpdatedAt() != null ? product.getUpdatedAt()
+                                                                : LocalDateTime.now())
+                                                .build());
 
-        return mapToDTO(inspection);
-    }
+                double averageScore = (dto.getFrameScore() + dto.getForkScore() + dto.getBrakesScore()
+                                + dto.getDrivetrainScore() + dto.getWheelsScore()) / 5.0;
 
-    @Override
-    @Transactional
-    public InspectionResponseDTO evaluateInspection(UUID productId, UUID inspectorId, InspectionEvaluationDTO dto) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+                int wearPercentage = dto.getWearPercentage() != null ? dto.getWearPercentage() : 0;
+                wearPercentage = Math.max(0, Math.min(100, wearPercentage));
+                double adjustedScore = averageScore * (1.0 - (wearPercentage / 100.0));
 
-        User inspector = userRepository.findById(inspectorId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+                BigDecimal overallScore = BigDecimal.valueOf(Math.max(0, adjustedScore)).setScale(1,
+                                RoundingMode.HALF_UP);
 
-        if (product.getStatus() != ProductStatus.pending_inspection) {
-            throw new AppException(ErrorCode.INVALID_STATUS);
+                inspection.setInspector(inspector);
+                inspection.setFrameScore(dto.getFrameScore());
+                inspection.setForkScore(dto.getForkScore());
+                inspection.setBrakesScore(dto.getBrakesScore());
+                inspection.setDrivetrainScore(dto.getDrivetrainScore());
+                inspection.setWheelsScore(dto.getWheelsScore());
+                inspection.setWearPercentage(dto.getWearPercentage());
+                inspection.setExpertNotes(dto.getExpertNotes());
+                inspection.setOverallScore(overallScore);
+                inspection.setPassed(dto.getPassed());
+                inspection.setValidUntil(LocalDateTime.now().plusDays(7));
+                inspection = inspectionRepository.save(inspection);
+
+                product.setStatus(Boolean.TRUE.equals(dto.getPassed()) ? ProductStatus.active
+                                : ProductStatus.inspected_failed);
+                productRepository.save(product);
+
+                publishInspectionResultNotification(product, inspection);
+
+                return mapToDTO(inspection);
         }
 
-        Inspection inspection = inspectionRepository.findByProductId(productId)
-                .orElseGet(() -> Inspection.builder()
-                        .product(product)
-                        .createdAt(product.getUpdatedAt() != null ? product.getUpdatedAt() : LocalDateTime.now())
-                        .build());
+        @Override
+        @Transactional
+        public InspectionResponseDTO uploadInspectionReport(UUID productId, UUID inspectorId,
+                        MultipartFile reportFile) {
+                MultipartFileValidationUtils.validatePdfReport(reportFile);
 
-        double averageScore = (dto.getFrameScore() + dto.getForkScore() + dto.getBrakesScore()
-                + dto.getDrivetrainScore() + dto.getWheelsScore()) / 5.0;
-        double wearFactor = 1.0 - (dto.getWearPercentage() != null ? dto.getWearPercentage() : 0) / 100.0;
-        BigDecimal overallScore = BigDecimal.valueOf(averageScore * wearFactor).setScale(1, RoundingMode.HALF_UP);
+                Product product = productRepository.findById(productId)
+                                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        inspection.setInspector(inspector);
-        inspection.setFrameScore(dto.getFrameScore());
-        inspection.setForkScore(dto.getForkScore());
-        inspection.setBrakesScore(dto.getBrakesScore());
-        inspection.setDrivetrainScore(dto.getDrivetrainScore());
-        inspection.setWheelsScore(dto.getWheelsScore());
-        inspection.setWearPercentage(dto.getWearPercentage());
-        inspection.setExpertNotes(dto.getExpertNotes());
-        inspection.setOverallScore(overallScore);
-        inspection.setPassed(dto.getPassed());
-        inspection.setValidUntil(LocalDateTime.now().plusDays(7));
-        inspection = inspectionRepository.save(inspection);
+                userRepository.findById(inspectorId)
+                                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        product.setStatus(Boolean.TRUE.equals(dto.getPassed()) ? ProductStatus.active : ProductStatus.inspected_failed);
-        productRepository.save(product);
+                Inspection inspection = inspectionRepository.findByProductId(productId)
+                                .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
 
-        publishInspectionResultNotification(product, inspection);
+                String previousReportUrl = inspection.getReportFileUrl();
+                String uploadedReportUrl = storageService.uploadFile(
+                                reportFile,
+                                "inspections/" + product.getId(),
+                                inspectionReportBucket);
+                inspection.setReportFileUrl(uploadedReportUrl);
+                inspection = inspectionRepository.save(inspection);
 
-        return mapToDTO(inspection);
-    }
+                if (previousReportUrl != null && !previousReportUrl.equals(uploadedReportUrl)) {
+                        storageService.deleteFile(previousReportUrl);
+                }
 
-    @Override
-    @Transactional
-    public InspectionResponseDTO uploadInspectionReport(UUID productId, UUID inspectorId, MultipartFile reportFile) {
-        MultipartFileValidationUtils.validatePdfReport(reportFile);
-
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
-
-        userRepository.findById(inspectorId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-        Inspection inspection = inspectionRepository.findByProductId(productId)
-                .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
-
-        String previousReportUrl = inspection.getReportFileUrl();
-        String uploadedReportUrl = storageService.uploadFile(
-                reportFile,
-                "inspections/" + product.getId(),
-                inspectionReportBucket
-        );
-        inspection.setReportFileUrl(uploadedReportUrl);
-        inspection = inspectionRepository.save(inspection);
-
-        if (previousReportUrl != null && !previousReportUrl.equals(uploadedReportUrl)) {
-            storageService.deleteFile(previousReportUrl);
+                return mapToDTO(inspection);
         }
 
-        return mapToDTO(inspection);
-    }
-
-    @Override
-    public InspectionResponseDTO getInspectionByProductId(UUID productId) {
-        return inspectionRepository.findByProductId(productId)
-                .map(this::mapToDTO)
-                .orElse(null);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<InspectionRequestItemResponseDTO> getInspectionRequests(String keyword, int page, int size) {
-        var pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by("createdAt").ascending());
-        Page<Product> requestPage = productRepository.findAll(ProductSpecification.fromInspectionRequestFilter(keyword), pageable);
-
-        if (requestPage.isEmpty()) {
-            return requestPage.map(product -> mapRequestItem(product, null, null));
+        @Override
+        public InspectionResponseDTO getInspectionByProductId(UUID productId) {
+                return inspectionRepository.findByProductId(productId)
+                                .map(this::mapToDTO)
+                                .orElse(null);
         }
 
-        Map<UUID, Inspection> inspectionsByProductId = inspectionRepository.findByProductIdIn(
-                        requestPage.getContent().stream().map(Product::getId).toList()
-                ).stream()
-                .collect(Collectors.toMap(
-                        inspection -> inspection.getProduct().getId(),
-                        Function.identity(),
-                        (left, right) -> left
-                ));
+        @Override
+        @Transactional(readOnly = true)
+        public Page<InspectionRequestItemResponseDTO> getInspectionRequests(String keyword, int page, int size) {
+                var pageable = PaginationValidationUtils.createPageRequest(page, size,
+                                Sort.by("createdAt").ascending());
+                Page<Product> requestPage = productRepository
+                                .findAll(ProductSpecification.fromInspectionRequestFilter(keyword), pageable);
 
-        Map<UUID, String> primaryImageUrlsByProductId = resolvePrimaryImageUrls(
-                requestPage.getContent().stream().map(Product::getId).toList()
-        );
+                if (requestPage.isEmpty()) {
+                        return requestPage.map(product -> mapRequestItem(product, null, null));
+                }
 
-        return requestPage.map(product -> mapRequestItem(
-                product,
-                inspectionsByProductId.get(product.getId()),
-                primaryImageUrlsByProductId.get(product.getId())
-        ));
-    }
+                Map<UUID, Inspection> inspectionsByProductId = inspectionRepository.findByProductIdIn(
+                                requestPage.getContent().stream().map(Product::getId).toList()).stream()
+                                .collect(Collectors.toMap(
+                                                inspection -> inspection.getProduct().getId(),
+                                                Function.identity(),
+                                                (left, right) -> left));
 
-    @Override
-    @Transactional(readOnly = true)
-    public Page<InspectionHistoryItemResponseDTO> getInspectionHistory(User currentUser, String keyword, int page, int size) {
-        UUID inspectorFilter = isAdmin(currentUser) ? null : currentUser.getId();
-        var pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
-        Page<Inspection> historyPage = inspectionRepository.findAll(InspectionSpecification.fromHistoryFilter(inspectorFilter, keyword), pageable);
+                Map<UUID, String> primaryImageUrlsByProductId = resolvePrimaryImageUrls(
+                                requestPage.getContent().stream().map(Product::getId).toList());
 
-        if (historyPage.isEmpty()) {
-            return historyPage.map(inspection -> mapHistoryItem(inspection, null));
+                return requestPage.map(product -> mapRequestItem(
+                                product,
+                                inspectionsByProductId.get(product.getId()),
+                                primaryImageUrlsByProductId.get(product.getId())));
         }
 
-        Map<UUID, String> primaryImageUrlsByProductId = resolvePrimaryImageUrls(
-                historyPage.getContent().stream()
-                        .map(inspection -> inspection.getProduct().getId())
-                        .toList()
-        );
+        @Override
+        @Transactional(readOnly = true)
+        public Page<InspectionHistoryItemResponseDTO> getInspectionHistory(User currentUser, String keyword, int page,
+                        int size) {
+                UUID inspectorFilter = isAdmin(currentUser) ? null : currentUser.getId();
+                var pageable = PaginationValidationUtils.createPageRequest(page, size,
+                                Sort.by(Sort.Direction.DESC, "updatedAt"));
+                Page<Inspection> historyPage = inspectionRepository
+                                .findAll(InspectionSpecification.fromHistoryFilter(inspectorFilter, keyword), pageable);
 
-        return historyPage.map(inspection -> mapHistoryItem(
-                inspection,
-                primaryImageUrlsByProductId.get(inspection.getProduct().getId())
-        ));
-    }
+                if (historyPage.isEmpty()) {
+                        return historyPage.map(inspection -> mapHistoryItem(inspection, null));
+                }
 
-    @Override
-    @Transactional(readOnly = true)
-    public InspectionDashboardResponseDTO getInspectionDashboard(User currentUser) {
-        boolean admin = isAdmin(currentUser);
-        UUID inspectorId = admin ? null : currentUser.getId();
-        LocalDateTime startOfWeek = LocalDateTime.now()
-                .with(java.time.DayOfWeek.MONDAY)
-                .with(LocalTime.MIN);
+                Map<UUID, String> primaryImageUrlsByProductId = resolvePrimaryImageUrls(
+                                historyPage.getContent().stream()
+                                                .map(inspection -> inspection.getProduct().getId())
+                                                .toList());
 
-        long pendingRequests = productRepository.countByStatus(ProductStatus.pending_inspection);
-        long completedThisWeek = admin
-                ? inspectionRepository.countByInspectorIsNotNullAndUpdatedAtAfter(startOfWeek)
-                : inspectionRepository.countByInspectorIdAndUpdatedAtAfter(inspectorId, startOfWeek);
-        long totalCompleted = admin
-                ? inspectionRepository.countByInspectorIsNotNull()
-                : inspectionRepository.countByInspectorId(inspectorId);
-        long passedCount = admin
-                ? inspectionRepository.countByInspectorIsNotNullAndPassedTrue()
-                : inspectionRepository.countByInspectorIdAndPassedTrue(inspectorId);
-
-        BigDecimal passRate = totalCompleted == 0
-                ? BigDecimal.ZERO
-                : BigDecimal.valueOf(passedCount * 100.0 / totalCompleted).setScale(1, RoundingMode.HALF_UP);
-        BigDecimal averageScore = admin
-                ? inspectionRepository.findAverageOverallScoreForAll()
-                : inspectionRepository.findAverageOverallScoreByInspectorId(inspectorId);
-
-        Page<InspectionHistoryItemResponseDTO> recentInspections = getInspectionHistory(currentUser, null, 0, 5);
-
-        return InspectionDashboardResponseDTO.builder()
-                .pendingRequests(pendingRequests)
-                .completedThisWeek(completedThisWeek)
-                .passRate(passRate)
-                .averageScore(averageScore != null ? averageScore.setScale(1, RoundingMode.HALF_UP) : null)
-                .recentInspections(recentInspections.getContent())
-                .build();
-    }
-
-    private InspectionResponseDTO mapToDTO(Inspection inspection) {
-        return InspectionResponseDTO.builder()
-                .id(inspection.getId())
-                .productId(inspection.getProduct().getId())
-                .inspectorId(inspection.getInspector() != null ? inspection.getInspector().getId() : null)
-                .overallScore(inspection.getOverallScore())
-                .frameScore(inspection.getFrameScore())
-                .forkScore(inspection.getForkScore())
-                .brakesScore(inspection.getBrakesScore())
-                .drivetrainScore(inspection.getDrivetrainScore())
-                .wheelsScore(inspection.getWheelsScore())
-                .wearPercentage(inspection.getWearPercentage())
-                .expertNotes(inspection.getExpertNotes())
-                .passed(inspection.getPassed())
-                .reportFileUrl(inspection.getReportFileUrl())
-                .validUntil(inspection.getValidUntil())
-                .createdAt(inspection.getCreatedAt())
-                .updatedAt(inspection.getUpdatedAt())
-                .build();
-    }
-
-    private InspectionRequestItemResponseDTO mapRequestItem(Product product, Inspection inspection, String productImageUrl) {
-        return InspectionRequestItemResponseDTO.builder()
-                .inspectionId(inspection != null ? inspection.getId() : product.getId())
-                .productId(product.getId())
-                .productTitle(product.getTitle())
-                .productPrice(product.getPrice())
-                .province(product.getProvince())
-                .productImageUrl(productImageUrl)
-                .sellerId(product.getSeller().getId())
-                .sellerName(product.getSeller().getFullName())
-                .sellerPhone(product.getSeller().getPhone())
-                .requestedAt(inspection != null
-                        ? inspection.getCreatedAt()
-                        : (product.getUpdatedAt() != null ? product.getUpdatedAt() : product.getCreatedAt()))
-                .build();
-    }
-
-    private InspectionHistoryItemResponseDTO mapHistoryItem(Inspection inspection, String productImageUrl) {
-        Product product = inspection.getProduct();
-        User seller = product.getSeller();
-        User inspector = inspection.getInspector();
-
-        return InspectionHistoryItemResponseDTO.builder()
-                .inspectionId(inspection.getId())
-                .productId(product.getId())
-                .productTitle(product.getTitle())
-                .productPrice(product.getPrice())
-                .province(product.getProvince())
-                .productImageUrl(productImageUrl)
-                .sellerId(seller.getId())
-                .sellerName(seller.getFullName())
-                .sellerPhone(seller.getPhone())
-                .inspectorId(inspector != null ? inspector.getId() : null)
-                .inspectorName(inspector != null ? inspector.getFullName() : null)
-                .overallScore(inspection.getOverallScore())
-                .passed(inspection.getPassed())
-                .reportFileUrl(inspection.getReportFileUrl())
-                .requestedAt(inspection.getCreatedAt())
-                .evaluatedAt(inspection.getUpdatedAt())
-                .validUntil(inspection.getValidUntil())
-                .build();
-    }
-
-    private Map<UUID, String> resolvePrimaryImageUrls(List<UUID> productIds) {
-        if (productIds.isEmpty()) {
-            return Map.of();
+                return historyPage.map(inspection -> mapHistoryItem(
+                                inspection,
+                                primaryImageUrlsByProductId.get(inspection.getProduct().getId())));
         }
 
-        return productImageRepository.findByProductIdInOrderByProductIdAscDisplayOrderAsc(productIds).stream()
-                .collect(Collectors.groupingBy(
-                        image -> image.getProduct().getId(),
-                        Collectors.collectingAndThen(Collectors.toList(), this::resolvePrimaryImageUrlFromList)
-                ));
-    }
+        @Override
+        @Transactional(readOnly = true)
+        public InspectionDashboardResponseDTO getInspectionDashboard(User currentUser) {
+                boolean admin = isAdmin(currentUser);
+                UUID inspectorId = admin ? null : currentUser.getId();
+                LocalDateTime startOfWeek = LocalDateTime.now()
+                                .with(java.time.DayOfWeek.MONDAY)
+                                .with(LocalTime.MIN);
 
-    private String resolvePrimaryImageUrlFromList(List<ProductImage> images) {
-        if (images.isEmpty()) {
-            return null;
+                long pendingRequests = productRepository.countByStatus(ProductStatus.pending_inspection);
+                long completedThisWeek = admin
+                                ? inspectionRepository.countByInspectorIsNotNullAndUpdatedAtAfter(startOfWeek)
+                                : inspectionRepository.countByInspectorIdAndUpdatedAtAfter(inspectorId, startOfWeek);
+                long totalCompleted = admin
+                                ? inspectionRepository.countByInspectorIsNotNull()
+                                : inspectionRepository.countByInspectorId(inspectorId);
+                long passedCount = admin
+                                ? inspectionRepository.countByInspectorIsNotNullAndPassedTrue()
+                                : inspectionRepository.countByInspectorIdAndPassedTrue(inspectorId);
+
+                BigDecimal passRate = totalCompleted == 0
+                                ? BigDecimal.ZERO
+                                : BigDecimal.valueOf(passedCount * 100.0 / totalCompleted).setScale(1,
+                                                RoundingMode.HALF_UP);
+                BigDecimal averageScore = admin
+                                ? inspectionRepository.findAverageOverallScoreForAll()
+                                : inspectionRepository.findAverageOverallScoreByInspectorId(inspectorId);
+
+                Page<InspectionHistoryItemResponseDTO> recentInspections = getInspectionHistory(currentUser, null, 0,
+                                5);
+
+                return InspectionDashboardResponseDTO.builder()
+                                .pendingRequests(pendingRequests)
+                                .completedThisWeek(completedThisWeek)
+                                .passRate(passRate)
+                                .averageScore(averageScore != null ? averageScore.setScale(1, RoundingMode.HALF_UP)
+                                                : null)
+                                .recentInspections(recentInspections.getContent())
+                                .build();
         }
 
-        return images.stream()
-                .sorted((left, right) -> {
-                    if (left.isPrimary() == right.isPrimary()) {
-                        return Integer.compare(left.getDisplayOrder(), right.getDisplayOrder());
-                    }
-                    return Boolean.compare(right.isPrimary(), left.isPrimary());
-                })
-                .findFirst()
-                .map(ProductImage::getUrl)
-                .orElse(null);
-    }
-
-    private boolean isAdmin(User currentUser) {
-        return currentUser.getRole() == AppRole.admin;
-    }
-
-    private void publishInspectionQueuedNotification(Product product) {
-        String metadata = "{\"productId\":\"" + product.getId() + "\"}";
-
-        eventPublisher.publishEvent(new NotificationEvent(
-                this,
-                product.getSeller().getId(),
-                "Tin đăng đã vào hàng chờ kiểm định",
-                "Tin \"" + product.getTitle()
-                        + "\" đã ở trong hàng chờ inspector. Tin chỉ được hiển thị công khai sau khi kiểm định đạt.",
-                NotificationType.inspection,
-                metadata
-        ));
-
-        userRepository.findByRole(AppRole.inspector).stream()
-                .map(User::getId)
-                .distinct()
-                .forEach(inspectorId -> eventPublisher.publishEvent(new NotificationEvent(
-                        this,
-                        inspectorId,
-                        "Có tin đăng mới cần kiểm định",
-                        "Tin \"" + product.getTitle() + "\" đang chờ inspector xử lý kiểm định.",
-                        NotificationType.inspection,
-                        metadata
-                )));
-    }
-
-    private void publishInspectionResultNotification(Product product, Inspection inspection) {
-        String title = inspection.getPassed() != null && inspection.getPassed()
-                ? "Tin đăng của bạn đã đạt kiểm định"
-                : "Tin đăng của bạn không đạt kiểm định";
-        String content = inspection.getPassed() != null && inspection.getPassed()
-                ? "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
-                + "\". Tin đăng hiện đã đủ điều kiện hiển thị công khai."
-                : "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
-                + "\" nhưng kết quả không đạt. Hãy chỉnh sửa tin đăng rồi gửi lại để vào hàng chờ kiểm định lại.";
-        String metadata = "{\"productId\":\"" + product.getId()
-                + "\",\"inspectionId\":\"" + inspection.getId()
-                + "\",\"passed\":" + Boolean.TRUE.equals(inspection.getPassed())
-                + ",\"reportFileUrl\":" + formatJsonString(inspection.getReportFileUrl()) + "}";
-
-        eventPublisher.publishEvent(new NotificationEvent(
-                this,
-                product.getSeller().getId(),
-                title,
-                content,
-                NotificationType.inspection,
-                metadata
-        ));
-    }
-
-    private String formatJsonString(String value) {
-        if (value == null) {
-            return "null";
+        private InspectionResponseDTO mapToDTO(Inspection inspection) {
+                return InspectionResponseDTO.builder()
+                                .id(inspection.getId())
+                                .productId(inspection.getProduct().getId())
+                                .inspectorId(inspection.getInspector() != null ? inspection.getInspector().getId()
+                                                : null)
+                                .overallScore(inspection.getOverallScore())
+                                .frameScore(inspection.getFrameScore())
+                                .forkScore(inspection.getForkScore())
+                                .brakesScore(inspection.getBrakesScore())
+                                .drivetrainScore(inspection.getDrivetrainScore())
+                                .wheelsScore(inspection.getWheelsScore())
+                                .wearPercentage(inspection.getWearPercentage())
+                                .expertNotes(inspection.getExpertNotes())
+                                .passed(inspection.getPassed())
+                                .reportFileUrl(inspection.getReportFileUrl())
+                                .validUntil(inspection.getValidUntil())
+                                .createdAt(inspection.getCreatedAt())
+                                .updatedAt(inspection.getUpdatedAt())
+                                .build();
         }
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
+
+        private InspectionRequestItemResponseDTO mapRequestItem(Product product, Inspection inspection,
+                        String productImageUrl) {
+                return InspectionRequestItemResponseDTO.builder()
+                                .inspectionId(inspection != null ? inspection.getId() : product.getId())
+                                .productId(product.getId())
+                                .productTitle(product.getTitle())
+                                .productPrice(product.getPrice())
+                                .province(product.getProvince())
+                                .productImageUrl(productImageUrl)
+                                .sellerId(product.getSeller().getId())
+                                .sellerName(product.getSeller().getFullName())
+                                .sellerPhone(product.getSeller().getPhone())
+                                .requestedAt(inspection != null
+                                                ? inspection.getCreatedAt()
+                                                : (product.getUpdatedAt() != null ? product.getUpdatedAt()
+                                                                : product.getCreatedAt()))
+                                .build();
+        }
+
+        private InspectionHistoryItemResponseDTO mapHistoryItem(Inspection inspection, String productImageUrl) {
+                Product product = inspection.getProduct();
+                User seller = product.getSeller();
+                User inspector = inspection.getInspector();
+
+                return InspectionHistoryItemResponseDTO.builder()
+                                .inspectionId(inspection.getId())
+                                .productId(product.getId())
+                                .productTitle(product.getTitle())
+                                .productPrice(product.getPrice())
+                                .province(product.getProvince())
+                                .productImageUrl(productImageUrl)
+                                .sellerId(seller.getId())
+                                .sellerName(seller.getFullName())
+                                .sellerPhone(seller.getPhone())
+                                .inspectorId(inspector != null ? inspector.getId() : null)
+                                .inspectorName(inspector != null ? inspector.getFullName() : null)
+                                .overallScore(inspection.getOverallScore())
+                                .passed(inspection.getPassed())
+                                .reportFileUrl(inspection.getReportFileUrl())
+                                .requestedAt(inspection.getCreatedAt())
+                                .evaluatedAt(inspection.getUpdatedAt())
+                                .validUntil(inspection.getValidUntil())
+                                .build();
+        }
+
+        private Map<UUID, String> resolvePrimaryImageUrls(List<UUID> productIds) {
+                if (productIds.isEmpty()) {
+                        return Map.of();
+                }
+
+                return productImageRepository.findByProductIdInOrderByProductIdAscDisplayOrderAsc(productIds).stream()
+                                .collect(Collectors.groupingBy(
+                                                image -> image.getProduct().getId(),
+                                                Collectors.collectingAndThen(Collectors.toList(),
+                                                                this::resolvePrimaryImageUrlFromList)));
+        }
+
+        private String resolvePrimaryImageUrlFromList(List<ProductImage> images) {
+                if (images.isEmpty()) {
+                        return null;
+                }
+
+                return images.stream()
+                                .sorted((left, right) -> {
+                                        if (left.isPrimary() == right.isPrimary()) {
+                                                return Integer.compare(left.getDisplayOrder(), right.getDisplayOrder());
+                                        }
+                                        return Boolean.compare(right.isPrimary(), left.isPrimary());
+                                })
+                                .findFirst()
+                                .map(ProductImage::getUrl)
+                                .orElse(null);
+        }
+
+        private boolean isAdmin(User currentUser) {
+                return currentUser.getRole() == AppRole.admin;
+        }
+
+        private void publishInspectionQueuedNotification(Product product) {
+                String metadata = "{\"productId\":\"" + product.getId() + "\"}";
+
+                eventPublisher.publishEvent(new NotificationEvent(
+                                this,
+                                product.getSeller().getId(),
+                                "Tin đăng đã vào hàng chờ kiểm định",
+                                "Tin \"" + product.getTitle()
+                                                + "\" đã ở trong hàng chờ inspector. Tin chỉ được hiển thị công khai sau khi kiểm định đạt.",
+                                NotificationType.inspection,
+                                metadata));
+
+                userRepository.findByRole(AppRole.inspector).stream()
+                                .map(User::getId)
+                                .distinct()
+                                .forEach(inspectorId -> eventPublisher.publishEvent(new NotificationEvent(
+                                                this,
+                                                inspectorId,
+                                                "Có tin đăng mới cần kiểm định",
+                                                "Tin \"" + product.getTitle()
+                                                                + "\" đang chờ inspector xử lý kiểm định.",
+                                                NotificationType.inspection,
+                                                metadata)));
+        }
+
+        private void publishInspectionResultNotification(Product product, Inspection inspection) {
+                String title = inspection.getPassed() != null && inspection.getPassed()
+                                ? "Tin đăng của bạn đã đạt kiểm định"
+                                : "Tin đăng của bạn không đạt kiểm định";
+                String content = inspection.getPassed() != null && inspection.getPassed()
+                                ? "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
+                                                + "\". Tin đăng hiện đã đủ điều kiện hiển thị công khai."
+                                : "Inspector đã hoàn tất kiểm định cho tin \"" + product.getTitle()
+                                                + "\" nhưng kết quả không đạt. Hãy chỉnh sửa tin đăng rồi gửi lại để vào hàng chờ kiểm định lại.";
+                String metadata = "{\"productId\":\"" + product.getId()
+                                + "\",\"inspectionId\":\"" + inspection.getId()
+                                + "\",\"passed\":" + Boolean.TRUE.equals(inspection.getPassed())
+                                + ",\"reportFileUrl\":" + formatJsonString(inspection.getReportFileUrl()) + "}";
+
+                eventPublisher.publishEvent(new NotificationEvent(
+                                this,
+                                product.getSeller().getId(),
+                                title,
+                                content,
+                                NotificationType.inspection,
+                                metadata));
+        }
+
+        private String formatJsonString(String value) {
+                if (value == null) {
+                        return "null";
+                }
+                return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        }
 }

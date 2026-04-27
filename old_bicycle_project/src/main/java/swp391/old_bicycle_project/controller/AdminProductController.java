@@ -68,4 +68,15 @@ public class AdminProductController {
                 .result(productService.changeStatus(id, request.getStatus()))
                 .build();
     }
+
+    @PatchMapping("/{id}/hide")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Hide product")
+    public ApiResponse<ProductResponse> hideProduct(@PathVariable UUID id) {
+        return ApiResponse.<ProductResponse>builder()
+                .code(200)
+                .message("Product hidden successfully")
+                .result(productService.changeStatus(id, ProductStatus.hidden))
+                .build();
+    }
 }

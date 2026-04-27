@@ -71,29 +71,36 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional
+    // requestRefund gồm check quyền buyer trên order, validate điều kiện refundable,
+    // tạo refund request + upload evidence, cập nhật funding status và gửi notification.
     public RefundResponseDTO requestRefund(
             UUID orderId,
             User currentUser,
             RefundCreateRequestDTO requestDTO,
             List<MultipartFile> files
     ) {
+        // 1. Lấy order của buyer hiện tại
         Order order = orderRepository.findByIdAndBuyerId(orderId, currentUser.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
 
+        // 2. Chỉ cho refund khi order đang deposited/awaiting_buyer_confirmation và tiền đang held
         boolean refundableStatus = order.getStatus() == OrderStatus.deposited
                 || order.getStatus() == OrderStatus.awaiting_buyer_confirmation;
         if (!refundableStatus || order.getFundingStatus() != OrderFundingStatus.held) {
             throw new AppException(ErrorCode.REFUND_NOT_ALLOWED);
         }
 
+        // 3. Chặn tạo trùng refund pending cho cùng order
         if (refundRequestRepository.findFirstByOrderIdAndStatusOrderByCreatedAtDesc(orderId, RefundStatus.pending).isPresent()) {
             throw new AppException(ErrorCode.RECORD_ALREADY_EXISTS);
         }
 
+        // 4. Lấy payment upfront thành công để xác định số tiền hoàn
         Payment payment = paymentRepository.findFirstByOrderIdAndPhaseOrderByCreatedAtDesc(orderId, PaymentPhase.upfront)
                 .filter(candidate -> candidate.getStatus() == PaymentStatus.success)
                 .orElseThrow(() -> new AppException(ErrorCode.REFUND_NOT_ALLOWED));
 
+        // 5. Tính và validate refund amount
         BigDecimal refundAmount = payment.getAmount() != null ? payment.getAmount() : order.getPaidAmount();
         if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException(ErrorCode.REFUND_NOT_ALLOWED);
@@ -102,6 +109,7 @@ public class RefundServiceImpl implements RefundService {
             throw new AppException(ErrorCode.REFUND_NOT_ALLOWED);
         }
 
+        // 6. Tạo refund request pending
         RefundRequest refundRequest = refundRequestRepository.save(RefundRequest.builder()
                 .order(order)
                 .payment(payment)
@@ -112,11 +120,14 @@ public class RefundServiceImpl implements RefundService {
                 .status(RefundStatus.pending)
                 .build());
 
+            // 7. Gắn evidence files (nếu có)
         refundRequest = attachEvidenceFiles(refundRequest, files);
 
+            // 8. Cập nhật funding status order sang refund_pending
         order.setFundingStatus(OrderFundingStatus.refund_pending);
         orderRepository.save(order);
 
+            // 9. Gửi notification cho buyer và admin
         publishOrderNotification(
                 currentUser.getId(),
                 "Đã tạo yêu cầu hoàn tiền",
@@ -130,12 +141,16 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional
+    // reviewRefund gồm lấy refund theo id, route theo action (approve/reject/complete),
+    // lưu trạng thái liên quan và trả kết quả mới nhất.
     public RefundResponseDTO reviewRefund(UUID refundId, User currentUser, RefundReviewRequestDTO requestDTO) {
+        // 1. Lấy refund request cần xử lý
         RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
         Order order = refundRequest.getOrder();
         Payment payment = refundRequest.getPayment();
 
+        // 2. Điều hướng xử lý theo status admin gửi lên
         switch (requestDTO.getStatus()) {
             case approved -> approveRefund(refundRequest, order, currentUser, requestDTO);
             case rejected -> rejectRefund(refundRequest, order, currentUser, requestDTO);
@@ -143,6 +158,7 @@ public class RefundServiceImpl implements RefundService {
             default -> throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 3. Persist các thay đổi refund/payment/order
         refundRequestRepository.save(refundRequest);
         if (refundRequest.getStatus() != RefundStatus.completed) {
             paymentRepository.save(payment);
@@ -154,21 +170,28 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional(readOnly = true)
+    // getAdminRefunds gồm filter + phân trang danh sách refund,
+    // enrich dữ liệu inspection và order evidence cho màn admin.
     public Page<AdminRefundResponseDTO> getAdminRefunds(String keyword, RefundStatus status, int page, int size) {
+        // 1. Tạo pageable chuẩn
         var pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by("createdAt").descending());
+        // 2. Query danh sách refund theo bộ lọc admin
         Page<RefundRequest> refundPage = refundRequestRepository.findAll(
                 RefundRequestSpecification.fromAdminFilter(keyword, status),
                 pageable
         );
 
+        // 3. Gom productIds để check inspection
         Set<UUID> productIds = refundPage.getContent().stream()
                 .map(RefundRequest::getOrder)
                 .filter(order -> order != null && order.getProduct() != null)
                 .map(order -> order.getProduct().getId())
                 .collect(java.util.stream.Collectors.toSet());
+            // 4. Lấy tập product đã có inspection
         Set<UUID> inspectedProductIds = productIds.isEmpty()
                 ? Set.of()
                 : new HashSet<>(inspectionRepository.findDistinctProductIdsWithInspection(productIds));
+            // 5. Lấy evidence theo order để enrich response
         Map<UUID, Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO>> evidenceByOrder =
                 orderEvidenceService.getEvidenceByOrderIds(
                         refundPage.getContent().stream()
@@ -178,6 +201,7 @@ public class RefundServiceImpl implements RefundService {
                                 .toList()
                 );
 
+            // 6. Map sang AdminRefundResponseDTO
         return refundPage.map(refundRequest -> mapToAdminDTO(
                 refundRequest,
                 refundRequest.getOrder() != null
@@ -196,16 +220,19 @@ public class RefundServiceImpl implements RefundService {
             User currentUser,
             RefundReviewRequestDTO requestDTO
     ) {
+        // 1. Chỉ approve khi refund đang pending
         if (refundRequest.getStatus() != RefundStatus.pending) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 2. Cập nhật trạng thái duyệt + thông tin reviewer
         refundRequest.setStatus(RefundStatus.approved);
         refundRequest.setAdminNote(requestDTO.getAdminNote());
         refundRequest.setReviewedBy(currentUser);
         refundRequest.setReviewedAt(LocalDateTime.now());
         order.setFundingStatus(OrderFundingStatus.refund_pending_transfer);
 
+        // 3. Đảm bảo payout bản ghi hoàn tiền đã được tạo
         payoutService.ensureRefundPayout(refundRequest);
     }
 
@@ -215,16 +242,19 @@ public class RefundServiceImpl implements RefundService {
             User currentUser,
             RefundReviewRequestDTO requestDTO
     ) {
+        // 1. Chỉ reject khi refund đang pending
         if (refundRequest.getStatus() != RefundStatus.pending) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 2. Cập nhật trạng thái từ chối + reviewer
         refundRequest.setStatus(RefundStatus.rejected);
         refundRequest.setAdminNote(requestDTO.getAdminNote());
         refundRequest.setReviewedBy(currentUser);
         refundRequest.setReviewedAt(LocalDateTime.now());
         order.setFundingStatus(OrderFundingStatus.held);
 
+        // 3. Thông báo kết quả cho buyer
         publishOrderNotification(
                 refundRequest.getRequester().getId(),
                 "Yêu cầu hoàn tiền bị từ chối",
@@ -238,10 +268,12 @@ public class RefundServiceImpl implements RefundService {
             User currentUser,
             RefundReviewRequestDTO requestDTO
     ) {
+        // 1. Chỉ complete khi refund đã approved
         if (refundRequest.getStatus() != RefundStatus.approved) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 2. Lấy payout refund và đánh dấu completed
         Payout payout = payoutService.ensureRefundPayout(refundRequest);
         payoutService.completeRefundPayout(payout, currentUser, requestDTO.getRefundReference(), requestDTO.getAdminNote());
     }
@@ -276,9 +308,11 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private RefundRequest attachEvidenceFiles(RefundRequest refundRequest, List<MultipartFile> files) {
+        // 1. Normalize + validate file đầu vào
         List<MultipartFile> normalizedFiles = MultipartFileValidationUtils.normalizeFiles(files);
         validateFiles(normalizedFiles);
 
+        // 2. Không có file thì giữ nguyên refund request
         if (normalizedFiles.isEmpty()) {
             return refundRequest;
         }
@@ -286,6 +320,7 @@ public class RefundServiceImpl implements RefundService {
         List<String> uploadedUrls = new ArrayList<>();
 
         try {
+            // 3. Upload từng file và gắn vào evidence list
             for (int index = 0; index < normalizedFiles.size(); index++) {
                 MultipartFile file = normalizedFiles.get(index);
                 String fileUrl = storageService.uploadFile(file, buildRefundEvidenceFolder(refundRequest.getId()));
@@ -298,13 +333,16 @@ public class RefundServiceImpl implements RefundService {
                         .build());
             }
 
+            // 4. Lưu refund request sau khi gắn file
             return refundRequestRepository.save(refundRequest);
         } catch (RuntimeException exception) {
+            // 5. Nếu lỗi thì rollback best-effort các file đã upload
             uploadedUrls.forEach(storageService::deleteFile);
             throw exception;
         }
     }
 
+    // validateFiles gồm validate số lượng + định dạng ảnh của evidence refund.
     private void validateFiles(List<MultipartFile> files) {
         MultipartFileValidationUtils.validateImageFiles(
                 files,

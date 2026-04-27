@@ -50,6 +50,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
+    // getAllUsers gồm tạo pageable, filter theo keyword/role/status/verified,
+    // và map sang AdminUserResponseDTO.
     public Page<AdminUserResponseDTO> getAllUsers(
             String keyword,
             AppRole role,
@@ -58,7 +60,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             int page,
             int size
     ) {
+        // 1. Tạo pageable có sort createdAt desc
         var pageable = PaginationValidationUtils.createPageRequest(page, size, Sort.by("createdAt").descending());
+        // 2. Query danh sách user theo filter admin
         return userRepository.findAll(
                 UserSpecification.fromAdminFilter(keyword, role, status, verified),
                 pageable
@@ -66,40 +70,56 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    // getUserById gồm lấy user bắt buộc tồn tại và map DTO.
     public AdminUserResponseDTO getUserById(UUID userId) {
         return toResponse(getRequiredUser(userId));
     }
 
     @Override
     @Transactional
+    // updateUserStatus gồm chặn admin tự khóa chính mình,
+    // cập nhật status của user đích và lưu.
     public AdminUserResponseDTO updateUserStatus(UUID userId, UserStatus status, UUID adminId) {
+        // 1. Chặn thao tác tự đổi trạng thái chính tài khoản admin đang thao tác
         if (adminId != null && adminId.equals(userId)) {
             throw new AppException(ErrorCode.SELF_STATUS_CHANGE_NOT_ALLOWED);
         }
 
+        // 2. Lấy user cần cập nhật và set status mới
         User user = getRequiredUser(userId);
         user.setStatus(status);
+        // 3. Lưu và trả response
         return toResponse(userRepository.save(user));
     }
 
     @Override
     @Transactional
+    // resetUserPassword gồm validate password policy, update hash password,
+    // thu hồi refresh token cũ và trả thông báo.
     public String resetUserPassword(UUID userId, String newPassword) {
+        // 1. Validate password mới theo policy
         passwordPolicyValidator.validate(newPassword);
 
+        // 2. Cập nhật password hash
         User user = getRequiredUser(userId);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+        // 3. Thu hồi toàn bộ refresh token hiện có
         refreshTokenService.deleteAllByUser(user);
 
         return "Admin da dat lai mat khau va thu hoi cac phien dang nhap cu.";
     }
 
     @Override
+    // getUserActivity gồm tổng hợp profile, các chỉ số và dữ liệu gần đây
+    // (products/orders/reports/notifications/wishlist) cho màn admin.
     public AdminUserActivityResponseDTO getUserActivity(UUID userId) {
+        // 1. Lấy user bắt buộc tồn tại
         User user = getRequiredUser(userId);
 
+        // 2. Tạo pageable top 5 theo createdAt desc
         var topFive = PaginationValidationUtils.createPageRequest(0, 5, Sort.by("createdAt").descending());
+        // 3. Tải các danh sách hoạt động gần đây
         List<Product> recentProducts = productRepository.findBySellerIdAndDeletedAtIsNull(userId, topFive).getContent();
         List<Order> recentOrders = orderRepository.findByBuyerIdOrSellerIdOrderByCreatedAtDesc(userId, userId)
                 .stream()
@@ -108,6 +128,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         List<Report> recentReports = reportRepository.findByReporterIdOrderByCreatedAtDesc(userId, topFive).getContent();
         List<Notification> recentNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, topFive).getContent();
 
+        // 4. Build DTO tổng hợp activity
         return AdminUserActivityResponseDTO.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
@@ -134,6 +155,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .build();
     }
 
+    // getRequiredUser gồm lấy user theo id hoặc ném USER_NOT_EXISTED.
     private User getRequiredUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));

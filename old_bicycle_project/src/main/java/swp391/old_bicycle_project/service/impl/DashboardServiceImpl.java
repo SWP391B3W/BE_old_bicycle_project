@@ -27,13 +27,23 @@ public class DashboardServiceImpl implements DashboardService {
     private final InspectionRepository inspectionRepository;
 
     @Override
+    // getDashboardStats gồm tổng hợp số liệu admin dashboard:
+    // user/product/order, doanh thu (GMV), platform fee theo status,
+    // inspection stats và dữ liệu theo tháng.
     public DashboardStatsDTO getDashboardStats() {
 
+        // 1. Tổng quan thực thể chính (active users, products chưa xóa mềm, orders chưa hủy).
         long totalUsers = userRepository.countByStatus(UserStatus.active);
         long totalProducts = productRepository.countByDeletedAtIsNull();
         long totalOrders = orderRepository.countByStatusNot(OrderStatus.cancelled);
 
+        // 2. Doanh thu tổng: lấy GMV từ orders completed.
         BigDecimal totalGmv = defaultZero(orderRepository.sumTotalAmountByStatus(OrderStatus.completed));
+
+        // 3. Platform fee theo từng status để admin theo dõi dòng tiền:
+        //    - pending: đã phát sinh nhưng chưa ghi nhận doanh thu,
+        //    - recognized: đã ghi nhận doanh thu nền tảng,
+        //    - reversed: đã đảo/hoàn phí.
         BigDecimal pendingPlatformFee = defaultZero(
                 orderRepository.sumPlatformFeeTotalByPlatformFeeStatus(PlatformFeeStatus.pending)
         );
@@ -44,15 +54,18 @@ public class DashboardServiceImpl implements DashboardService {
                 orderRepository.sumPlatformFeeTotalByPlatformFeeStatus(PlatformFeeStatus.reversed)
         );
 
+        // 4. Thống kê kiểm định cho dashboard inspector/admin.
         long totalInspections = inspectionRepository.countByInspectorIsNotNull();
         long passedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedTrue();
         long failedInspections = inspectionRepository.countByInspectorIsNotNullAndPassedFalse();
 
+        // 5. Chuỗi thời gian theo tháng (GMV, platform revenue đã recognized, số đơn completed).
         Map<String, BigDecimal> monthlyGmv = toBigDecimalMap(orderRepository.getMonthlyCompletedGmv());
         Map<String, BigDecimal> monthlyRecognizedPlatformRevenue =
                 toBigDecimalMap(orderRepository.getMonthlyRecognizedPlatformRevenue());
         Map<String, Long> monthlyOrders = toLongMap(orderRepository.getMonthlyCompletedOrderCount());
 
+        // 6. Build DTO trả về cho admin dashboard.
         return DashboardStatsDTO.builder()
                 .totalUsers(totalUsers)
                 .totalProducts(totalProducts)
@@ -72,10 +85,12 @@ public class DashboardServiceImpl implements DashboardService {
                 .build();
     }
 
+    // defaultZero: chuẩn hóa số liệu null từ query aggregate về 0.
     private BigDecimal defaultZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    // toBigDecimalMap: chuyển danh sách [month, amount] từ native query thành map month -> amount.
     private Map<String, BigDecimal> toBigDecimalMap(List<Object[]> rawRows) {
         Map<String, BigDecimal> result = new LinkedHashMap<>();
         for (Object[] row : rawRows) {
@@ -88,6 +103,7 @@ public class DashboardServiceImpl implements DashboardService {
         return result;
     }
 
+    // toLongMap: chuyển danh sách [month, count] từ native query thành map month -> count.
     private Map<String, Long> toLongMap(List<Object[]> rawRows) {
         Map<String, Long> result = new LinkedHashMap<>();
         for (Object[] row : rawRows) {

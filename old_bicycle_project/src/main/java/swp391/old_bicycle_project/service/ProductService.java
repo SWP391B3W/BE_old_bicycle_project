@@ -81,26 +81,35 @@ public class ProductService {
     private final StorageService storageService;
 
     public Page<ProductResponse> searchProducts(ProductFilterRequest filter, int page, int size) {
+        // 1. Validate bộ lọc giá để tránh range sai
         validatePriceRange(filter);
+        // 2. Build specification + sort + pageable
         Specification<Product> spec = ProductSpecification.fromFilter(filter);
         Sort sort = buildSort(filter);
         Pageable pageable = PaginationValidationUtils.createPageRequest(page, size, sort);
 
+        // 3. Query và map sang response
         return mapProductPage(productRepository.findAll(spec, pageable));
     }
 
+    // getById gồm lấy sản phẩm công khai hợp lệ, build thông tin ảnh/seller,
+    // kiểm tra pending order + favorite của current user và trả response đầy đủ.
     public ProductResponse getById(UUID id, User currentUser) {
+        // 1. Lấy product chưa bị xóa mềm
         Product product = findActiveProductById(id);
         Inspection inspection = inspectionRepository.findByProductId(product.getId()).orElse(null);
+        // 2. Chỉ cho xem khi status công khai và inspection còn hiệu lực
         if (!PUBLIC_VISIBLE_STATUSES.contains(product.getStatus()) || !isInspectionCurrentlyValid(product, inspection)) {
             throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
+        // 3. Lấy ảnh theo display order
         List<ProductImage> productImages = productImageRepository.findByProductIdOrderByDisplayOrderAsc(product.getId());
         if ((productImages == null || productImages.isEmpty()) && product.getImages() != null) {
             productImages = product.getImages();
         }
 
+        // 4. Map ảnh sang DTO
         List<ProductResponse.ImageInfo> imageInfos = productImages.stream()
                 .map(img -> ProductResponse.ImageInfo.builder()
                         .id(img.getId())
@@ -110,6 +119,7 @@ public class ProductService {
                         .build())
                 .collect(Collectors.toList());
 
+            // 5. Map seller info
         User seller = product.getSeller();
         ProductResponse.SellerInfo sellerInfo = seller != null
                 ? ProductResponse.SellerInfo.builder()
@@ -121,6 +131,7 @@ public class ProductService {
                 .build()
                 : null;
 
+            // 6. Tính cờ pendingOrder + favorite cho current user
         boolean hasPendingOrder = currentUser != null && orderRepository.existsByBuyerIdAndProductIdAndStatusIn(
                 currentUser.getId(),
                 product.getId(),
@@ -132,6 +143,7 @@ public class ProductService {
                 product.getId()
         );
 
+            // 7. Build response cuối cùng
         return buildProductResponse(
                 product,
                 inspection,
@@ -158,15 +170,21 @@ public class ProductService {
 
     @Transactional
     public ProductResponse create(ProductCreateRequest request, List<MultipartFile> images, User seller) {
+        // Delegate về luồng create đầy đủ (hỗ trợ cả upload file và nhận URL ảnh có sẵn).
         return create(request, images, List.of(), seller);
     }
 
     @Transactional
+    // Luồng tạo product mới (đăng bài):
+    // validate input -> resolve reference -> tạo product pending_inspection
+    // -> lưu ảnh -> tạo inspection pending -> gửi notification.
     public ProductResponse create(ProductCreateRequest request, List<MultipartFile> images, List<String> imageUrls, User seller) {
+        // 1. Chuẩn hóa input ảnh + validate field kỹ thuật bắt buộc + số lượng ảnh tối thiểu.
         List<MultipartFile> normalizedImages = MultipartFileValidationUtils.normalizeFiles(images);
         validateRequiredTechnicalFields(request.getFrameSize(), request.getWheelSize());
         validateMinimumImages(normalizedImages, imageUrls);
 
+        // 2. Resolve reference data (bắt buộc: brakeType, frameMaterial; tùy chọn: brand, category, groupset).
         BrakeType brakeType = brakeTypeRepository.findById(request.getBrakeTypeId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND));
         FrameMaterial frameMaterial = frameMaterialRepository.findById(request.getFrameMaterialId())
@@ -180,6 +198,7 @@ public class ProductService {
                 : null;
         Groupset groupsetReference = resolveGroupsetReference(request.getGroupsetId(), request.getGroupset());
 
+        // 3. Khởi tạo entity product ở trạng thái pending_inspection để chờ kiểm định.
         Product product = Product.builder()
                 .seller(seller)
                 .title(request.getTitle())
@@ -200,13 +219,19 @@ public class ProductService {
                 .status(ProductStatus.pending_inspection)
                 .build();
 
+        // 4. Persist product để có ID, set hạn hiển thị ban đầu, sau đó lưu bộ ảnh.
         productRepository.save(product);
         product.setExpiresAt(product.getCreatedAt().plusDays(30));
         product.setImages(saveProductImages(product, normalizedImages, imageUrls));
+
+        // 5. Tạo/reset inspection về trạng thái pending (chưa có kết quả kiểm định).
         createPendingInspection(product);
         productRepository.save(product);
+
+        // 6. Phát notification cho seller và inspector để vào hàng chờ kiểm định.
         publishInspectionQueuedNotification(product);
 
+        // 7. Trả response đầy đủ (bao gồm ảnh/seller/inspection info).
         return toResponse(product);
     }
 
@@ -216,11 +241,15 @@ public class ProductService {
     }
 
     @Transactional
+    // update (sửa bài) gồm check quyền seller, cập nhật field cho phép,
+    // xử lý ảnh mới (nếu có), đưa lại pending_inspection và gửi notification.
     public ProductResponse update(UUID id, ProductUpdateRequest request, List<MultipartFile> newImages, List<String> newImageUrls, User currentUser) {
+        // 1. Lấy product + check quyền sửa
         Product product = findActiveProductById(id);
         validateSellerCanModify(product, currentUser);
         List<MultipartFile> normalizedNewImages = MultipartFileValidationUtils.normalizeFiles(newImages);
 
+        // 2. Patch các field nội dung được gửi lên
         if (request.getTitle() != null) product.setTitle(request.getTitle());
         if (request.getDescription() != null) product.setDescription(request.getDescription());
         if (request.getPrice() != null) product.setPrice(request.getPrice());
@@ -236,8 +265,10 @@ public class ProductService {
             product.setGroupset(resolveGroupsetDisplayValue(groupsetReference, request.getGroupset()));
         }
 
+        // 3. Validate field kỹ thuật sau patch
         validateRequiredTechnicalFields(product.getFrameSize(), product.getWheelSize());
 
+        // 4. Resolve reference data nếu có thay đổi
         if (request.getBrandId() != null) {
             product.setBrand(brandRepository.findById(request.getBrandId()).orElse(null));
         }
@@ -253,6 +284,7 @@ public class ProductService {
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND)));
         }
 
+        // 5. Nếu có ảnh mới/url mới thì thay bộ ảnh hiện tại
         if (!normalizedNewImages.isEmpty() || (newImageUrls != null && !newImageUrls.isEmpty())) {
             validateMinimumImages(normalizedNewImages, newImageUrls);
             removeStoredImages(product);
@@ -261,10 +293,12 @@ public class ProductService {
             product.getImages().addAll(uploadedImages);
         }
 
+        // 6. Đưa lại pending_inspection và gia hạn hạn kiểm định
         product.setStatus(ProductStatus.pending_inspection);
         product.setExpiresAt(LocalDateTime.now().plusDays(30));
         createPendingInspection(product);
         Product savedProduct = productRepository.save(product);
+        // 7. Gửi notification vào hàng chờ inspection
         publishInspectionQueuedNotification(savedProduct);
 
         return toResponse(savedProduct);
@@ -617,10 +651,12 @@ public class ProductService {
     }
 
     private void validateMinimumImages(List<MultipartFile> images, List<String> imageUrls) {
+        // Ưu tiên kiểm tra danh sách file upload; nếu không có file thì kiểm tra danh sách URL.
         List<MultipartFile> normalizedImages = images != null ? images : List.of();
         List<String> normalizedImageUrls = normalizeImageUrls(imageUrls);
 
         if (!normalizedImages.isEmpty()) {
+            // Nhánh upload file: yêu cầu tối thiểu 3 ảnh hợp lệ.
             MultipartFileValidationUtils.validateRequiredImages(
                     normalizedImages,
                     3,
@@ -630,37 +666,41 @@ public class ProductService {
             return;
         }
 
+        // Nhánh URL có sẵn: cũng yêu cầu tối thiểu 3 URL ảnh.
         if (normalizedImageUrls.size() < 3) {
             throw new AppException(ErrorCode.PRODUCT_MINIMUM_IMAGES_REQUIRED);
         }
     }
 
     private List<ProductImage> uploadImages(Product product, List<MultipartFile> images) {
+        // Upload từng file lên storage và map thành ProductImage theo displayOrder.
         List<ProductImage> productImages = new ArrayList<>();
-        int displayOrder = 0;
-        for (MultipartFile file : images) {
+        int displayOrder = 0; //displayOrder là thứ tự hiển thị ảnh. 
+        for (MultipartFile file : images) { // tạo vòng lặp để xử lý từng file ảnh trong danh sách images.
             if (file == null || file.isEmpty()) {
                 continue;
             }
-            String url = storageService.uploadFile(file, "products/" + product.getId());
+            String url = storageService.uploadFile(file, "products/" + product.getId()); 
             productImages.add(ProductImage.builder()
                     .product(product)
-                    .url(url)
+                    .url(url) // 
                     .isPrimary(displayOrder == 0)
                     .displayOrder(displayOrder)
-                    .build());
-            displayOrder++;
+                    .build()); //.build để tạo đối tượng ProductImage. 
+            displayOrder++; 
         }
         productImageRepository.saveAll(productImages);
         return productImages;
     }
-
+    
     private List<ProductImage> saveProductImages(Product product, List<MultipartFile> images, List<String> imageUrls) {
+        // 1. Nếu có file upload mới -> đi nhánh upload storage.
         List<MultipartFile> normalizedImages = images != null ? images : List.of();
         if (!normalizedImages.isEmpty()) {
             return uploadImages(product, normalizedImages);
         }
 
+        // 2. Nếu không có file -> đi nhánh dùng URL có sẵn để tạo ProductImage records.
         List<String> normalizedImageUrls = normalizeImageUrls(imageUrls);
         List<ProductImage> productImages = new ArrayList<>();
         for (int displayOrder = 0; displayOrder < normalizedImageUrls.size(); displayOrder++) {

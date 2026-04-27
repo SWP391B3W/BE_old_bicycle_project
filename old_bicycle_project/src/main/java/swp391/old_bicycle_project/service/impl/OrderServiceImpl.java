@@ -71,21 +71,28 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // createOrder gồm lock product, validate quyền/trạng thái, tính upfront + platform fee,
+    // tạo order pending và gửi notification cho seller.
     public OrderResponseDTO createOrder(User currentUser, OrderCreateRequestDTO requestDTO) {
+        // 1. Lock product để tránh race condition khi nhiều người cùng đặt
         Product product = orderTransitionSupport.lockProduct(requestDTO.getProductId());
 
+        // 2. Chặn seller tự mua sản phẩm của mình
         if (product.getSeller().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
+        // 3. Chỉ cho tạo đơn khi sản phẩm đang khả dụng
         if (product.getStatus() != ProductStatus.active && product.getStatus() != ProductStatus.inspected_passed) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 4. Nếu đã có exclusive lock thì không cho tạo thêm
         if (orderRepository.existsExclusiveOrderLockByProductId(product.getId())) {
             throw new AppException(ErrorCode.RECORD_ALREADY_EXISTS);
         }
 
+        // 5. Chặn buyer tạo trùng đơn đang mở cho cùng sản phẩm
         if (orderRepository.existsByBuyerIdAndProductIdAndStatusIn(
                 currentUser.getId(),
                 product.getId(),
@@ -100,16 +107,19 @@ public class OrderServiceImpl implements OrderService {
                 requestDTO,
                 product.getPrice(),
                 paymentOption);
+            // 6. Tính phí nền tảng theo payment method
         PlatformFeeService.PlatformFeeQuote platformFeeQuote = platformFeeService.calculate(
                 product.getPrice(),
                 requiredUpfrontAmount,
                 requestDTO.getPaymentMethod());
 
+            // 7. Với partial payment: đảm bảo upfront đủ cover seller fee
         if (paymentOption == PaymentOption.partial
                 && platformFeeQuote.sellerFeeAmount().compareTo(requiredUpfrontAmount) > 0) {
             throw new AppException(ErrorCode.UPFRONT_AMOUNT_TOO_LOW);
         }
 
+            // 8. Tạo order ở trạng thái pending/unpaid
         Order order = orderRepository.save(Order.builder()
                 .buyer(currentUser)
                 .seller(product.getSeller())
@@ -135,6 +145,7 @@ public class OrderServiceImpl implements OrderService {
                 .status(OrderStatus.pending)
                 .build());
 
+            // 9. Gửi notification cho seller có yêu cầu mua mới
         orderTransitionSupport.publishOrderNotification(
                 order.getSeller().getId(),
                 "Có yêu cầu mua mới",
@@ -146,6 +157,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
+    // getMyOrders gồm lấy danh sách theo role (admin thấy tất cả, user thấy đơn liên quan)
+    // và map sang DTO có enrich evidence/review.
     public List<OrderResponseDTO> getMyOrders(User currentUser) {
         List<Order> orders = currentUser.getRole() == AppRole.admin
                 ? orderRepository.findAllByOrderByCreatedAtDesc()
@@ -155,21 +168,28 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // acceptOrder gồm check quyền seller/admin, validate trạng thái, check payout profile,
+    // set deadline thanh toán, reject các offer cạnh tranh và gửi notification cho buyer.
     public OrderResponseDTO acceptOrder(UUID orderId, User currentUser) {
+        // 1. Lấy order và check quyền thao tác
         Order order = orderTransitionSupport.getOrder(orderId);
         orderTransitionSupport.validateSellerOrAdmin(order, currentUser);
+        // 2. Lock product để đồng bộ trạng thái đơn liên quan
         orderTransitionSupport.lockProduct(order.getProduct().getId());
 
+        // 3. Chỉ chấp nhận khi order đang pending + unpaid
         if (order.getStatus() != OrderStatus.pending || order.getFundingStatus() != OrderFundingStatus.unpaid) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
         if (orderRepository.existsExclusiveOrderLockByProductId(order.getProduct().getId())) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
+        // 4. Seller phải có payout profile trước khi nhận đơn
         if (!payoutService.hasCompleteProfile(order.getSeller())) {
             throw new AppException(ErrorCode.PAYOUT_PROFILE_REQUIRED);
         }
 
+        // 5. Cập nhật mốc accept + deadline thanh toán 24h
         LocalDateTime acceptedAt = LocalDateTime.now();
         order.setAcceptedAt(acceptedAt);
         order.setPaymentDeadline(acceptedAt.plusHours(24));
@@ -177,8 +197,10 @@ public class OrderServiceImpl implements OrderService {
         order.setCancelReason(null);
         order.setCancelledAt(null);
         order = orderRepository.save(order);
+        // 6. Từ chối các pending offer cạnh tranh cùng sản phẩm
         orderTransitionSupport.rejectCompetingPendingOffers(order, acceptedAt);
 
+        // 7. Thông báo cho buyer tiến hành thanh toán upfront
         orderTransitionSupport.publishOrderNotification(
                 order.getBuyer().getId(),
                 "Yêu cầu đặt cọc đã được chấp nhận",
@@ -197,20 +219,27 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // completeOrder gồm check quyền seller/admin, chuyển sang awaiting_buyer_confirmation,
+    // tạo seller handover evidence và thông báo deadline 5 ngày cho buyer.
     public OrderResponseDTO completeOrder(UUID orderId, User currentUser, String note, List<MultipartFile> files) {
+        // 1. Lấy order + check quyền
         Order order = orderTransitionSupport.getOrder(orderId);
         orderTransitionSupport.validateSellerOrAdmin(order, currentUser);
 
+        // 2. Chỉ cho thao tác khi order đã deposited
         if (order.getStatus() != OrderStatus.deposited) {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 3. Chuyển trạng thái chờ buyer xác nhận trong 5 ngày
         order.setStatus(OrderStatus.awaiting_buyer_confirmation);
         order.setBuyerConfirmationDeadline(LocalDateTime.now().plusDays(5));
         order = orderRepository.save(order);
+        // 4. Tạo evidence phía seller (nếu có)
         OrderEvidenceSubmissionResponseDTO sellerEvidence = orderEvidenceService.createSellerHandoverEvidence(order,
                 currentUser, note, files);
 
+        // 5. Gửi notification cho buyer
         orderTransitionSupport.publishOrderNotification(
                 order.getBuyer().getId(),
                 "Người bán đã xác nhận gửi hàng",
@@ -226,6 +255,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // confirmReceived gồm check quyền buyer/admin, validate trạng thái,
+    // rồi finalize giao dịch và release payout.
     public OrderResponseDTO confirmReceived(UUID orderId, User currentUser, String note, List<MultipartFile> files) {
         Order order = orderTransitionSupport.getOrder(orderId);
         orderTransitionSupport.validateBuyerOrAdmin(order, currentUser);
@@ -239,12 +270,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // cancelOrder gồm check quyền hủy, validate trạng thái/funding cho phép,
+    // cập nhật reason + trạng thái fee và gửi thông báo hủy đơn.
     public OrderResponseDTO cancelOrder(UUID orderId, User currentUser) {
+        // 1. Lấy order và xác định ngữ cảnh seller reject request
         Order order = orderTransitionSupport.getOrder(orderId);
         boolean wasSellerReviewRequest = order.getStatus() == OrderStatus.pending
                 && order.getFundingStatus() == OrderFundingStatus.unpaid
                 && order.getAcceptedAt() == null;
 
+        // 2. Check quyền buyer/seller/admin
         boolean canCancel = currentUser.getRole() == AppRole.admin
                 || order.getBuyer().getId().equals(currentUser.getId())
                 || order.getSeller().getId().equals(currentUser.getId());
@@ -252,6 +287,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
+        // 3. Chặn hủy với trạng thái đã hoàn tất/đã giữ tiền/đã hoàn tiền
         if (order.getStatus() == OrderStatus.completed
                 || order.getStatus() == OrderStatus.cancelled
                 || order.getStatus() == OrderStatus.deposited
@@ -265,10 +301,12 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(ErrorCode.INVALID_STATUS);
         }
 
+        // 4. Cập nhật trạng thái hủy và funding tương ứng
         order.setStatus(OrderStatus.cancelled);
         if (order.getFundingStatus() == OrderFundingStatus.awaiting_payment) {
             order.setFundingStatus(OrderFundingStatus.unpaid);
         }
+        // 5. Nếu chưa thu phí thì reset platform fee về not_applicable
         if (orderTransitionSupport.isUnpaidOrAwaitingPayment(order)
                 && order.getPlatformFeeStatus() == PlatformFeeStatus.pending) {
             order.setPlatformFeeStatus(PlatformFeeStatus.not_applicable);
@@ -276,6 +314,7 @@ public class OrderServiceImpl implements OrderService {
             order.setPlatformFeeReversedAt(null);
         }
         order.setCancelledAt(LocalDateTime.now());
+        // 6. Set cancel reason theo actor thao tác
         if (currentUser.getRole() == AppRole.admin) {
             order.setCancelReason(OrderCancelReason.admin_cancelled);
         } else if (order.getSeller().getId().equals(currentUser.getId())) {
@@ -284,6 +323,7 @@ public class OrderServiceImpl implements OrderService {
         } else {
             order.setCancelReason(OrderCancelReason.buyer_cancelled);
         }
+        // 7. Lưu và publish notification
         Order savedOrder = orderRepository.save(order);
         orderTransitionSupport.publishCancellationNotifications(savedOrder, currentUser);
         return orderViewSupport.mapToDTO(savedOrder);
@@ -291,6 +331,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    // autoCompleteOverdueBuyerConfirmations gồm quét đơn quá hạn buyer confirmation
+    // và tự động finalize để giải phóng payout flow.
     public int autoCompleteOverdueBuyerConfirmations() {
         LocalDateTime now = LocalDateTime.now();
         List<Order> overdueOrders = orderRepository.findByStatusAndFundingStatusAndBuyerConfirmationDeadlineBefore(
@@ -308,6 +350,7 @@ public class OrderServiceImpl implements OrderService {
             String note,
             List<MultipartFile> files,
             boolean autoCompleted) {
+        // 1. Hoàn tất order + chuyển funding sang seller_payout_pending
         order.setStatus(OrderStatus.completed);
         order.setFundingStatus(OrderFundingStatus.seller_payout_pending);
         order.setBuyerConfirmationDeadline(null);
@@ -315,9 +358,11 @@ public class OrderServiceImpl implements OrderService {
         productRepository.save(order.getProduct());
         order = orderRepository.save(order);
 
+        // 2. Gom evidence hiện có của order
         Map<OrderEvidenceType, OrderEvidenceSubmissionResponseDTO> evidenceByType = new EnumMap<>(OrderEvidenceType.class);
         evidenceByType.putAll(orderEvidenceService.getEvidenceByOrderId(order.getId()));
 
+        // 3. Nếu buyer xác nhận thủ công thì thêm buyer receipt evidence
         if (!autoCompleted && currentUser != null) {
             OrderEvidenceSubmissionResponseDTO buyerEvidence = orderEvidenceService.createBuyerReceiptEvidence(order,
                     currentUser, note, files);
@@ -326,8 +371,10 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
+        // 4. Tạo/cập nhật payout cho seller
         Payout payout = payoutService.ensureSellerReleasePayout(order);
 
+        // 5. Gửi notification theo nhánh auto-complete hoặc manual-confirm
         if (autoCompleted) {
             orderTransitionSupport.publishOrderNotification(
                     order.getBuyer().getId(),

@@ -42,23 +42,32 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public String uploadFile(MultipartFile file, String folder) {
+        // Wrapper tiện dụng: dùng bucket mặc định từ config.
         return uploadFile(file, folder, bucket);
     }
 
     @Override
+    // Luồng upload file lên Supabase Storage:
+    // validate input -> chuẩn hóa bucket/folder + tên file -> gọi API upload
+    // -> trả public URL khi thành công hoặc ném lỗi khi thất bại.
     public String uploadFile(MultipartFile file, String folder, String bucketName) {
+        // 1. Validate file đầu vào.
         if (file == null || file.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_REQUEST_BODY);
         }
 
+        // 2. Chuẩn hóa bucket/folder và tạo object path duy nhất.
         String normalizedBucket = normalizeBucket(bucketName);
         String normalizedFolder = normalizeFolder(folder);
         String filename = UUID.randomUUID() + "_" + sanitizeFilename(file.getOriginalFilename());
         String path = normalizedFolder + "/" + filename;
+
+        // 3. Resolve credential cho Storage API  để xem role key hay anon key có phải JWT (có thể dùng làm Bearer token) hay không.
         String apiKey = resolveStorageApiKey();
         String bearerToken = resolveBearerToken(apiKey);
 
         try {
+            // 4. Build HTTP request upload object lên Supabase Storage.
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(buildObjectUrl(normalizedBucket, path)))
                     .timeout(Duration.ofSeconds(30))
@@ -66,23 +75,28 @@ public class StorageServiceImpl implements StorageService {
                     .header("apikey", apiKey)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(file.getBytes()));
 
+            // 5. Nếu có JWT thì gắn Authorization header.
             if (bearerToken != null) {
                 requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken);
             }
 
             HttpRequest request = requestBuilder.build();
 
+            // 6. Gửi request; thành công thì trả public URL để lưu DB.
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 return buildPublicUrl(normalizedBucket, path);
             }
 
+            // 7. Thất bại thì trả lỗi kèm status/body để dễ debug.
             String responseBody = response.body() == null ? "" : response.body().trim();
             throw new RuntimeException("Upload file thất bại: HTTP " + response.statusCode()
                     + (responseBody.isEmpty() ? "" : " - " + responseBody));
         } catch (IOException exception) {
+            // Lỗi đọc byte từ MultipartFile.
             throw new RuntimeException("Không thể đọc file: " + exception.getMessage(), exception);
         } catch (InterruptedException exception) {
+            // Lỗi gián đoạn luồng khi gọi HTTP.
             Thread.currentThread().interrupt();
             throw new RuntimeException("Upload file bị gián đoạn", exception);
         }

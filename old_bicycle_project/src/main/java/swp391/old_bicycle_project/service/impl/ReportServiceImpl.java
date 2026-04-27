@@ -64,15 +64,17 @@ public class ReportServiceImpl implements ReportService {
     private final ProductRepository productRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final StorageService storageService;
-
+   
     @Override
     @Transactional
+    // submitReport gồm check user tồn tại, check target tồn tại, check đã có report mở nào cho target chưa, tạo report, upload file (nếu có), publish notification cho admin
     public ReportResponseDTO submitReport(UUID reporterId, ReportRequestDTO requestDTO, List<MultipartFile> files) {
+        // 1. Check user tồn tại
         User reporter = userRepository.findById(reporterId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
+        // 2. Check target tồn tại
         validateTargetExists(requestDTO.getTargetType(), requestDTO.getTargetId());
-
+        // 3. Check đã có report mở nào cho target chưa
         if (reportRepository.existsByReporterIdAndTargetIdAndStatusIn(
                 reporterId,
                 requestDTO.getTargetId(),
@@ -80,7 +82,7 @@ public class ReportServiceImpl implements ReportService {
         )) {
             throw new AppException(ErrorCode.RECORD_ALREADY_EXISTS);
         }
-
+        // 4. Tạo report
         Report report = reportRepository.save(Report.builder()
                 .reporter(reporter)
                 .targetId(requestDTO.getTargetId())
@@ -89,7 +91,7 @@ public class ReportServiceImpl implements ReportService {
                 .description(trimToNull(requestDTO.getDescription()))
                 .status(ReportStatus.pending)
                 .build());
-
+        // 5. Upload file (nếu có) và liên kết với report
         report = attachEvidenceFiles(report, files);
         publishPendingReportNotification(report);
         return mapToDTO(report);
@@ -123,55 +125,74 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional
+    // processReport gồm check report tồn tại, check admin tồn tại, validate chuyển trạng thái,
+    // cập nhật report, áp dụng xử lý (nếu upheld), publish notification cho các bên liên quan
     public ReportResponseDTO processReport(UUID reportId, ReportProcessDTO processDTO, UUID adminId) {
+        // 1. Check report tồn tại
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new AppException(ErrorCode.RECORD_NOT_EXISTS));
+        // 2. Check admin tồn tại
         User admin = userRepository.findById(adminId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
+        // 3. Validate chuyển trạng thái hợp lệ
         validateProcessTransition(report.getStatus(), processDTO.getStatus());
 
+        // 4. Cập nhật trạng thái + thông tin xử lý
         report.setStatus(processDTO.getStatus());
         report.setAdminNote(trimToNull(processDTO.getAdminNote()));
         report.setProcessedAt(LocalDateTime.now());
         report.setProcessedBy(admin);
 
         UUID affectedUserId = null;
+        // 5. Nếu xác nhận vi phạm thì áp dụng xử lý theo target
         if (processDTO.getStatus() == ReportStatus.resolved_upheld) {
             affectedUserId = applySanctions(report.getTargetType(), report.getTargetId());
         }
 
+        // 6. Lưu report + gửi thông báo
         report = reportRepository.save(report);
         publishReportNotifications(report, affectedUserId);
         return mapToDTO(report);
     }
 
+    // validateTargetExists gồm normalize targetType, check target theo từng loại (USER/PRODUCT),
+    // và ném lỗi nếu target không tồn tại hoặc loại target không hợp lệ.
     private void validateTargetExists(String targetType, UUID targetId) {
+        // 1. Normalize loại target để so sánh ổn định
         String normalizedTargetType = normalizeTargetType(targetType);
+        // 2. Nếu target là USER thì check user tồn tại
         if ("USER".equals(normalizedTargetType)) {
             if (!userRepository.existsById(targetId)) {
                 throw new AppException(ErrorCode.USER_NOT_EXISTED);
             }
             return;
         }
+        // 3. Nếu target là PRODUCT thì check product tồn tại
         if ("PRODUCT".equals(normalizedTargetType)) {
             if (!productRepository.existsById(targetId)) {
                 throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
             }
             return;
         }
+        // 4. TargetType không hợp lệ
         throw new AppException(ErrorCode.INVALID_KEY);
     }
 
+    // validateProcessTransition gồm check null, chặn trạng thái terminal/lặp lại,
+    // và chỉ cho phép các transition hợp lệ theo state machine.
     private void validateProcessTransition(ReportStatus currentStatus, ReportStatus nextStatus) {
+        // 1. Check trạng thái đầu vào không được null
         if (currentStatus == null || nextStatus == null) {
             throw new AppException(ErrorCode.INVALID_REPORT_STATUS_TRANSITION);
         }
 
+        // 2. Chặn chuyển từ trạng thái terminal hoặc chuyển sang chính nó
         if (TERMINAL_REPORT_STATUSES.contains(currentStatus) || currentStatus == nextStatus) {
             throw new AppException(ErrorCode.INVALID_REPORT_STATUS_TRANSITION);
         }
 
+        // 3. Kiểm tra transition hợp lệ theo trạng thái hiện tại
         boolean isValidTransition = switch (currentStatus) {
             case pending -> nextStatus == ReportStatus.investigating
                     || nextStatus == ReportStatus.resolved_upheld
@@ -181,13 +202,17 @@ public class ReportServiceImpl implements ReportService {
             default -> false;
         };
 
+        // 4. Nếu không hợp lệ thì ném lỗi
         if (!isValidTransition) {
             throw new AppException(ErrorCode.INVALID_REPORT_STATUS_TRANSITION);
         }
     }
 
+    // applySanctions gồm xử lý theo targetType: USER thì ban user, PRODUCT thì ẩn product,
+    // trả về affectedUserId để gửi notification hậu xử lý.
     private UUID applySanctions(String targetType, UUID targetId) {
         try {
+            // 1. Target USER -> ban user
             if ("USER".equalsIgnoreCase(targetType)) {
                 User user = userRepository.findById(targetId)
                         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
@@ -196,6 +221,7 @@ public class ReportServiceImpl implements ReportService {
                 log.info("Banned user with ID: {}", targetId);
                 return user.getId();
             }
+            // 2. Target PRODUCT -> hidden product
             if ("PRODUCT".equalsIgnoreCase(targetType)) {
                 Product product = productRepository.findById(targetId)
                         .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -205,16 +231,22 @@ public class ReportServiceImpl implements ReportService {
                 return product.getSeller() != null ? product.getSeller().getId() : null;
             }
         } catch (AppException ex) {
+            // 3. Lỗi nghiệp vụ thì ném lại nguyên trạng
             throw ex;
         } catch (Exception ex) {
+            // 4. Lỗi hệ thống thì log để điều tra
             log.error("Failed to apply sanctions for targetType: {}, targetId: {}", targetType, targetId, ex);
         }
+        // 5. Fallback khi targetType không hỗ trợ hoặc xử lý thất bại
         throw new AppException(ErrorCode.INVALID_STATUS);
     }
 
+    // publishReportNotifications gồm gửi thông báo cho reporter và user bị ảnh hưởng (nếu có).
     private void publishReportNotifications(Report report, UUID affectedUserId) {
+        // 1. Dựng metadata dùng chung cho notification
         String metadata = "{\"reportId\":\"" + report.getId() + "\",\"status\":\"" + report.getStatus() + "\"}";
 
+        // 2. Gửi thông báo cập nhật trạng thái cho reporter
         eventPublisher.publishEvent(new NotificationEvent(
                 this,
                 report.getReporter().getId(),
@@ -224,6 +256,7 @@ public class ReportServiceImpl implements ReportService {
                 metadata
         ));
 
+        // 3. Nếu có affectedUser thì gửi thêm thông báo xử lý vi phạm
         if (affectedUserId != null) {
             eventPublisher.publishEvent(new NotificationEvent(
                     this,
@@ -236,8 +269,11 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    // publishPendingReportNotification gồm lấy danh sách admin và broadcast báo cáo mới cần xử lý.
     private void publishPendingReportNotification(Report report) {
+        // 1. Dựng metadata cho thông báo
         String metadata = "{\"reportId\":\"" + report.getId() + "\",\"status\":\"" + report.getStatus() + "\"}";
+        // 2. Lấy toàn bộ admin và gửi notification theo từng người
         userRepository.findByRole(AppRole.admin).stream()
                 .map(User::getId)
                 .distinct()
@@ -252,9 +288,11 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private Report attachEvidenceFiles(Report report, List<MultipartFile> files) {
+        // 1. Normalize + validate danh sách file đầu vào
         List<MultipartFile> normalizedFiles = MultipartFileValidationUtils.normalizeFiles(files);
         validateFiles(normalizedFiles);
 
+        // 2. Không có file thì trả report hiện tại
         if (normalizedFiles.isEmpty()) {
             return report;
         }
@@ -262,6 +300,7 @@ public class ReportServiceImpl implements ReportService {
         List<String> uploadedUrls = new ArrayList<>();
 
         try {
+            // 3. Upload từng file lên storage và gắn vào report
             for (int index = 0; index < normalizedFiles.size(); index++) {
                 MultipartFile file = normalizedFiles.get(index);
                 String fileUrl = storageService.uploadFile(file, buildReportEvidenceFolder(report.getId()));
@@ -274,13 +313,16 @@ public class ReportServiceImpl implements ReportService {
                         .build());
             }
 
+            // 4. Lưu report sau khi đã gắn danh sách evidence
             return reportRepository.save(report);
         } catch (RuntimeException exception) {
+            // 5. Nếu lỗi thì rollback file đã upload (best effort) rồi ném lại lỗi
             uploadedUrls.forEach(storageService::deleteFile);
             throw exception;
         }
     }
 
+    // validateFiles gồm validate loại file ảnh và số lượng file evidence theo rule hệ thống.
     private void validateFiles(List<MultipartFile> files) {
         MultipartFileValidationUtils.validateImageFiles(
                 files,

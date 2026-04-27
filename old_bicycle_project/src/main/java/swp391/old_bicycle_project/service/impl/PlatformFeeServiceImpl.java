@@ -47,10 +47,9 @@ public class PlatformFeeServiceImpl implements PlatformFeeService {
                     }
                 })
                 .orElse(DEFAULT_PLATFORM_FEE_RATE);
-
         BigDecimal platformFeeTotal = normalizedTotalAmount
-            .multiply(feeRate)
-            .setScale(0, RoundingMode.HALF_UP);
+                .multiply(feeRate)
+                .setScale(0, RoundingMode.HALF_UP);
         BigDecimal buyerFeeAmount = BigDecimal.ZERO;
         BigDecimal sellerFeeAmount = platformFeeTotal;
         BigDecimal buyerChargeAmount = normalizedProtectedAmount;
